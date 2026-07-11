@@ -66,11 +66,13 @@ A **Run** is one execution of a workflow, and everything about it is recorded.
     └── bass/
         ├── models.py             Core domain types
         ├── policy.py             Policy engine (the safety gate)
-        ├── tools.py              Tool registry + example tools
+        ├── tools.py              Tool registry + example tools + offline MockModel
         ├── agent.py              The agent control loop
+        ├── providers.py          Real model provider — Claude via the Anthropic API
         ├── workflow.py           Deterministic workflow engine
         ├── orchestrator.py       Ties triggers → workflows → runs
-        └── example_run.py        A worked end-to-end example
+        ├── example_run.py        A worked end-to-end example (offline)
+        └── example_run_live.py   Same example, driven by a real Claude call
 ```
 
 ## Where to start reading

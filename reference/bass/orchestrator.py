@@ -18,9 +18,12 @@ from .workflow import WorkflowEngine
 
 class Orchestrator:
     def __init__(self, tenant: Tenant, agents: dict[str, Agent], tools: ToolRegistry,
-                 policy: PolicyEngine, approval_fn: Callable | None = None):
+                 policy: PolicyEngine, approval_fn: Callable | None = None,
+                 model=None):
         self.tenant = tenant
-        model = MockModel()
+        # Default to the offline MockModel; pass providers.AnthropicModel(tools)
+        # (or any object with a compatible .respond) to run against the real API.
+        model = model if model is not None else MockModel()
         self.runtime = AgentRuntime(model, tools, policy, approval_fn=approval_fn)
         self.engine = WorkflowEngine(agents, tools, policy, self.runtime)
 

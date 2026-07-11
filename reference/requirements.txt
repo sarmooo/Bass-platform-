@@ -1,7 +1,12 @@
-# The reference scaffold intentionally uses only the Python standard library so it
-# runs anywhere with no install step. A real deployment would add, e.g.:
+# The core scaffold and the offline example (bass.example_run) use only the Python
+# standard library, so they run anywhere with no install step.
 #
-#   anthropic         # the model provider SDK
+# The live example (bass.example_run_live), which drives a real Claude call via
+# bass.providers.AnthropicModel, needs the Anthropic SDK:
+#
+#   anthropic
+#
+# A real deployment would add more, e.g.:
 #   fastapi uvicorn   # the API gateway
 #   sqlalchemy psycopg # Postgres state store
 #   pydantic          # schema validation

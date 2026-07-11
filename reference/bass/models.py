@@ -55,12 +55,17 @@ class Tool:
 
     `side_effect=True` marks a mutating tool (subject to stricter policy).
     `fn` is the connector call; in production it would hit an external system.
+    `input_schema` is the JSON Schema the model sees and validates against — it
+    is what makes tool arguments typed (docs/02-components.md § Tool contract).
     """
     name: str
     description: str
     fn: Callable[[dict], Any]
     side_effect: bool = False
     cost_usd: float = 0.0
+    input_schema: dict[str, Any] = field(
+        default_factory=lambda: {"type": "object", "properties": {}}
+    )
 
 
 @dataclass
@@ -72,6 +77,8 @@ class Agent:
     model: str = "claude-sonnet-5"
     tools: list[str] = field(default_factory=list)   # allow-list of tool names
     max_steps: int = 8
+    # When set, the runtime asks the model for JSON and parses it to this shape.
+    output_schema: Optional[dict[str, Any]] = None
 
 
 # --- workflows --------------------------------------------------------------

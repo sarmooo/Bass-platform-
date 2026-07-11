@@ -63,6 +63,11 @@ def default_registry() -> ToolRegistry:
         fn=_lookup_vendor,
         side_effect=False,
         cost_usd=0.0,
+        input_schema={
+            "type": "object",
+            "properties": {"vendor": {"type": "string", "description": "Vendor name"}},
+            "required": ["vendor"],
+        },
     ))
     reg.register(Tool(
         name="create_ap_entry",
@@ -70,6 +75,15 @@ def default_registry() -> ToolRegistry:
         fn=_create_ap_entry,
         side_effect=True,          # mutating => stricter policy
         cost_usd=0.0,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "vendor": {"type": "string"},
+                "invoice_number": {"type": "string"},
+                "amount": {"type": "number"},
+            },
+            "required": ["vendor", "invoice_number", "amount"],
+        },
     ))
     return reg
 
@@ -77,15 +91,16 @@ def default_registry() -> ToolRegistry:
 # --- mock model -------------------------------------------------------------
 
 class MockModel:
-    """Deterministic stand-in for an LLM.
+    """Deterministic, offline stand-in for an LLM.
 
-    Real deployment: replace `respond` with an Anthropic API call that passes the
-    agent's tool allow-list via the native tool-use interface, and parse the model's
-    tool_use / text blocks. The agent loop in agent.py is written against this same
-    shape, so nothing else changes.
+    Implements the same `respond` interface as `providers.AnthropicModel` (which
+    calls the real Claude API), so the agent loop in agent.py is identical for
+    both. This one returns a canned `final` answer with no tool calls, keeping
+    the example deterministic and dependency-free.
     """
 
-    # A response is either a tool call or a final answer.
+    # This mock always returns a final answer; a real model may instead return
+    # {"type": "tool_calls", ...} which the runtime executes and feeds back.
     def respond(self, agent: Agent, task: dict, scratch: dict) -> dict:
         # The 'invoice_extractor' agent: pretend we OCR'd + parsed the email.
         if agent.name == "invoice_extractor":
