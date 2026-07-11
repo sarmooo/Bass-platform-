@@ -39,6 +39,11 @@ deployment swaps the implementation without touching the engine:
   a cross-tenant access raises rather than leaking.
 - **Budgets** (`budgets.py`) — cost and step ceilings fail a run closed.
 - **Structured logging + metrics** (`observability.py`).
+- **Property-based invariants** (`tests/test_properties.py`) — Hypothesis checks
+  the core guarantees across thousands of generated inputs: redaction never
+  leaks a secret/email/API key and is idempotent, the rate limiter admits
+  exactly `min(calls, limit)` per window, JWT mint/decode round-trips and rejects
+  a wrong secret, and the cron matcher is correct.
 - **OpenTelemetry tracing** (`tracing.py`) — a span per run and per step (attributes
   `bass.run_id`, `bass.status`, `bass.node_type`, …); no-op unless the `[otel]` extra
   is installed. Verified with an in-memory exporter in `tests/test_otel.py`.
