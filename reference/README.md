@@ -10,7 +10,7 @@ deployment swaps the implementation without touching the engine:
 
 | Concern | Interface | Reference default | Production swap |
 |---------|-----------|-------------------|-----------------|
-| State + event log | `store.Store` | `SQLiteStore` (WAL, ACID) | Postgres + row-level security |
+| State + event log | `store.Store` | `SQLiteStore` (WAL, ACID) | `PostgresStore` (implemented; CI-verified) |
 | Model | `respond()` | `tools.MockModel` | `providers.AnthropicModel` (Claude) |
 | Secrets | `secrets.SecretsProvider` | `EnvSecrets` | Vault / cloud KMS |
 | Connector | `connectors.Connector` | in-process example | Gmail, Salesforce, HTTP, DB |
@@ -59,7 +59,15 @@ python -m unittest discover -s tests -t .      # zero dependencies
 ```
 
 21 tests cover the properties above, including a crash-before-checkpoint →
-resume → **exactly-once** scenario and cross-tenant isolation.
+resume → **exactly-once** scenario and cross-tenant isolation. CI runs the
+identical suite twice — once on SQLite and once against a **real PostgreSQL**
+service container (`bass.store_postgres.PostgresStore`), proving the state layer
+on production infrastructure. To reproduce locally:
+
+```bash
+export BASS_TEST_DB_URL=postgresql://user:pass@localhost:5432/bass
+pip install -e ".[dev,postgres]" && pytest -q
+```
 
 ## Run the live example (real Claude call)
 

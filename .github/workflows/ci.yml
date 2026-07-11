@@ -6,27 +6,57 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: Lint & test (reference)
+  unit:
+    name: Lint & unit tests (SQLite)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: reference
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-
       - name: Lint (ruff)
         run: ruff check bass tests
+      - name: Test (pytest, SQLite store)
+        run: pytest -q
 
-      - name: Test (pytest)
+  integration-postgres:
+    name: Integration tests (real PostgreSQL)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bass
+          POSTGRES_PASSWORD: bass
+          POSTGRES_DB: bass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The full suite runs against this real PostgreSQL server via open_store().
+      BASS_TEST_DB_URL: postgresql://bass:bass@localhost:5432/bass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (with PostgreSQL driver)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,postgres]"
+      - name: Test (pytest, PostgreSQL store)
         run: pytest -q

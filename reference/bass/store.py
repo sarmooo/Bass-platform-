@@ -62,6 +62,16 @@ CREATE TABLE IF NOT EXISTS tool_effects (
 """
 
 
+def open_store(url_or_path: str) -> "Store":
+    """Store factory. A PostgreSQL DSN selects `PostgresStore`; anything else is
+    treated as a SQLite path. Lets a deployment switch the state layer with one
+    env var and no code change."""
+    if url_or_path.startswith(("postgres://", "postgresql://")):
+        from .store_postgres import PostgresStore
+        return PostgresStore(url_or_path)
+    return SQLiteStore(url_or_path)
+
+
 class Store(Protocol):
     def ensure_tenant(self, tenant_id: str, name: str, settings: dict) -> None: ...
     def create_or_get_run(self, run: Run) -> tuple[Run, bool]: ...

@@ -6,6 +6,7 @@ pytest in CI). Each test asserts one production property of the platform.
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,13 +20,21 @@ from bass.example_run import build_agents, build_workflow, demo_approver
 from bass.models import Agent, PolicyEffect, Run, RunStatus, Tool, Workflow
 from bass.policy import Policy, PolicyEngine, default_policies
 from bass.redaction import REDACTED, redact
-from bass.store import SQLiteStore
+from bass.store import SQLiteStore, open_store
 from bass.tools import _AccountingSystem, default_registry
 from bass.workflow import WorkflowEngine
 
 
 def _tmp_db() -> str:
     return str(Path(tempfile.mkdtemp()) / "t.db")
+
+
+def make_store():
+    """Build the store under test. Defaults to a fresh SQLite file; when
+    BASS_TEST_DB_URL is set (a PostgreSQL DSN in CI), the identical suite runs
+    against a real PostgreSQL server."""
+    url = os.environ.get("BASS_TEST_DB_URL")
+    return open_store(url) if url else SQLiteStore(_tmp_db())
 
 
 def _run_seed(wf: Workflow, tenant_id: str, key: str = "k1") -> Run:
@@ -107,7 +116,7 @@ class RedactionTests(unittest.TestCase):
 
 class StoreTests(unittest.TestCase):
     def setUp(self):
-        self.store = SQLiteStore(_tmp_db())
+        self.store = make_store()
         self.store.ensure_tenant("tenant_a", "A", {})
         self.store.ensure_tenant("tenant_b", "B", {})
         self.wf = build_workflow()
@@ -195,8 +204,7 @@ class BudgetTests(unittest.TestCase):
 
 class EngineDurabilityTests(unittest.TestCase):
     def setUp(self):
-        self.db = _tmp_db()
-        self.store = SQLiteStore(self.db)
+        self.store = make_store()
         self.store.ensure_tenant("acme", "Acme", {})
         self.acct = _AccountingSystem()
         self.tools = default_registry(self.acct)
@@ -269,7 +277,7 @@ class EndToEndTests(unittest.TestCase):
     def test_orchestrator_dedup_across_two_fires(self):
         from bass.orchestrator import Orchestrator
         from bass.models import Tenant
-        store = SQLiteStore(_tmp_db())
+        store = make_store()
         acct = _AccountingSystem()
         tools = default_registry(acct)
         orch = Orchestrator(store, Tenant(name="Acme"), build_agents(), tools,
