@@ -131,7 +131,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build image (local, for smoke + load test)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -172,7 +172,7 @@ jobs:
         run: docker rm -f bass || true
       - name: Publish, attest (SBOM + provenance) & sign
         if: github.event_name == 'push'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         id: push
         with:
           context: .
