@@ -45,6 +45,10 @@ deployment swaps the implementation without touching the engine:
 - **Real HTTP connector** (`connectors.http_call`) — retries 5xx/connection
   errors as transient, returns 4xx; integration-tested against a live local
   server (`tests/test_connectors_http.py`).
+- **Outbound webhook connector** (`webhook.py`) — a concrete Slack-style
+  notification integration on the reliable HTTP connector; a side-effect tool
+  (idempotency key forwarded as a header, routed through the ledger + policy
+  gate). Contract-tested against a live local server (`tests/test_webhook.py`).
 - **DB-enforced tenant isolation** — PostgreSQL row-level security
   (`store_postgres.apply_row_level_security` / `RLS_SQL`), proven at the database
   layer in `tests/test_rls.py`.
