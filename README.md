@@ -4,9 +4,37 @@
 companies automate repetitive, knowledge-heavy, and cross-system work using AI
 agents, deterministic workflows, and human oversight — safely and at scale.
 
-This repository is a **design + reference implementation**. It contains the
-architecture, data model, security model, and a runnable Python scaffold that
-demonstrates the core control loop.
+This repository is a **design + working reference implementation**. It contains the
+architecture, data model, and security model (in [`docs/`](docs/)), plus a
+production-shaped Python implementation of the control loop (in [`reference/`](reference/))
+that is continuously verified in CI.
+
+## Implemented & CI-verified
+
+The [`reference/`](reference/) code is not a toy scaffold — it is exercised on every
+push by a multi-job pipeline ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+lint + types + unit tests with a coverage gate, an **integration suite against a real
+PostgreSQL** service container, a **Temporal** durable-execution test on Temporal's
+test server, and a **Docker image build → smoke test → publish to GHCR**.
+
+| Capability | Where | Verified by |
+|---|---|---|
+| Durable, crash-safe, idempotent execution | `workflow.py`, `store.py` | crash→resume→exactly-once test |
+| Durable execution on **Temporal** | `temporal_adapter.py` | Temporal test-server job |
+| State layer: SQLite **and PostgreSQL** | `store.py`, `store_postgres.py` | same suite on both backends |
+| DB-enforced tenant isolation (**RLS**) | `store_postgres.py` | real-Postgres RLS test |
+| Fail-closed policy gate + async approvals | `policy.py`, `workflow.py` | policy + API approval tests |
+| **HTTP API** + JWT auth + RBAC | `api.py`, `auth.py` | FastAPI TestClient suite |
+| Connector reliability + real HTTP connector | `connectors.py` | live local-server test |
+| Scheduled (cron) triggers | `schedule.py` | cron + dedup tests |
+| Run cancellation, retention/purge, readiness, metrics, list | `store*.py`, `api.py` | dedicated tests |
+| Real model provider (Claude) | `providers.py` | native tool-use (opt-in) |
+| Packaging, Docker→GHCR, mypy, coverage, pip-audit, Dependabot | root + `pyproject.toml` | CI |
+
+See [`reference/README.md`](reference/README.md) for how to run each. External
+infrastructure sits behind interfaces (SQLite→Postgres, MockModel→Claude,
+env-secrets→vault, in-process→Temporal) so a deployment swaps implementations without
+touching the engine.
 
 ---
 
