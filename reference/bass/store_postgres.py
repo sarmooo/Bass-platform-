@@ -51,6 +51,25 @@ CREATE TABLE IF NOT EXISTS tool_effects (
     created_at DOUBLE PRECISION NOT NULL);
 """
 
+# Row-level security: every tenant-scoped table is filtered by the session's
+# bass.tenant_id GUC, so isolation is enforced by PostgreSQL even if application
+# code is bypassed. FORCE makes the table owner subject to the policy too.
+RLS_SQL = """
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['runs','events','approvals','tool_effects'] LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
+    EXECUTE format(
+      'CREATE POLICY tenant_isolation ON %I '
+      'USING (tenant_id = current_setting(''bass.tenant_id'', true)) '
+      'WITH CHECK (tenant_id = current_setting(''bass.tenant_id'', true))', t);
+  END LOOP;
+END $$;
+"""
+
 
 class PostgresStore:
     def __init__(self, dsn: str):
@@ -63,6 +82,16 @@ class PostgresStore:
 
     def close(self) -> None:
         self._conn.close()
+
+    def apply_row_level_security(self) -> None:
+        """Enable DB-enforced tenant isolation (defense in depth over the app
+        checks). After this, the app role is subject to the policies and must set
+        the tenant per transaction via
+        ``SELECT set_config('bass.tenant_id', <tenant>, true)``. Provided as the
+        production migration; not enabled by default so the reference store's
+        behavior stays identical to SQLite."""
+        with self._lock, self._conn.transaction():
+            self._conn.execute(RLS_SQL)
 
     # -- tenants -----------------------------------------------------------
 

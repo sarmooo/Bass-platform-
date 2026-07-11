@@ -12,7 +12,10 @@ compose `Connector`; the reference ships an in-process example in `tools.py`.
 
 from __future__ import annotations
 
+import json
 import time
+import urllib.error
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -113,3 +116,27 @@ class Connector:
 
         assert last is not None
         raise last
+
+
+def http_call(args: dict) -> Any:
+    """A real HTTP operation for use behind a `Connector`.
+
+    args: {method, url, headers?, json?}. 5xx responses and connection errors
+    raise `Transient` so the connector retries them; 4xx responses are returned
+    (a client error is not retryable). The connector supplies timeout/breaker.
+    """
+    method = args.get("method", "GET").upper()
+    data = json.dumps(args["json"]).encode() if "json" in args else None
+    headers = dict(args.get("headers", {}))
+    if data is not None:
+        headers.setdefault("Content-Type", "application/json")
+    req = urllib.request.Request(args["url"], data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req) as resp:      # noqa: S310 (trusted callers)
+            return {"status": resp.status, "body": resp.read().decode()}
+    except urllib.error.HTTPError as exc:
+        if exc.code >= 500:
+            raise Transient(f"http {exc.code}") from exc
+        return {"status": exc.code, "body": exc.read().decode()}
+    except urllib.error.URLError as exc:
+        raise Transient(f"connection error: {exc.reason}") from exc

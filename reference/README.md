@@ -38,6 +38,14 @@ deployment swaps the implementation without touching the engine:
   a cross-tenant access raises rather than leaking.
 - **Budgets** (`budgets.py`) — cost and step ceilings fail a run closed.
 - **Structured logging + metrics** (`observability.py`).
+- **Real HTTP connector** (`connectors.http_call`) — retries 5xx/connection
+  errors as transient, returns 4xx; integration-tested against a live local
+  server (`tests/test_connectors_http.py`).
+- **DB-enforced tenant isolation** — PostgreSQL row-level security
+  (`store_postgres.apply_row_level_security` / `RLS_SQL`), proven at the database
+  layer in `tests/test_rls.py`.
+- **Concurrency-safe** — exactly-once under contention (32 concurrent fires of one
+  trigger → one run, one side effect) in `tests/test_concurrency.py`.
 
 ## Run the offline example
 
