@@ -1,8 +1,11 @@
 # Deploy
 
-Deployment artifacts for the Bass API. All are validated in CI by
-[`.github/workflows/deploy-validate.yml`](../.github/workflows/deploy-validate.yml)
-(helm lint + template + kubeconform, and `docker compose config`).
+Deployment artifacts for the Bass API. These are **validated** in CI by
+[`deploy-validate.yml`](../.github/workflows/deploy-validate.yml) (helm
+lint + template + kubeconform, and `docker compose config`) **and exercised
+for real** by [`e2e.yml`](../.github/workflows/e2e.yml): the compose stack is
+brought up and fired against real Postgres, and the Helm chart is deployed to an
+ephemeral `kind` cluster (migration hook → readiness → upgrade/rollback drill).
 
 | Artifact | What it is |
 |----------|-----------|
