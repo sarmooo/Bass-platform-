@@ -60,34 +60,51 @@ A **Run** is one execution of a workflow, and everything about it is recorded.
 │   ├── 07-deployment.md           Infra, scaling, environments
 │   ├── 08-use-cases.md            Worked end-to-end examples
 │   └── 09-roadmap.md              Phased delivery plan
-└── reference/                    Runnable Python scaffold of the core loop
+└── reference/                    Production-shaped Python implementation
     ├── README.md
-    ├── requirements.txt
-    └── bass/
-        ├── models.py             Core domain types
-        ├── policy.py             Policy engine (the safety gate)
-        ├── tools.py              Tool registry + example tools + offline MockModel
-        ├── agent.py              The agent control loop
-        ├── providers.py          Real model provider — Claude via the Anthropic API
-        ├── workflow.py           Deterministic workflow engine
-        ├── orchestrator.py       Ties triggers → workflows → runs
-        ├── example_run.py        A worked end-to-end example (offline)
-        └── example_run_live.py   Same example, driven by a real Claude call
+    ├── pyproject.toml            Packaging, extras ([live], [dev]), ruff/pytest config
+    ├── bass/
+    │   ├── config.py             Env-driven settings
+    │   ├── errors.py             Typed error hierarchy
+    │   ├── observability.py      Structured JSON logging + metrics
+    │   ├── redaction.py          Secret/PII masking at write time
+    │   ├── models.py             Core domain types
+    │   ├── store.py              Store interface + SQLiteStore (durable, ACID, tenant-scoped)
+    │   ├── secrets.py            SecretsProvider interface + env/static impls
+    │   ├── policy.py             Fail-closed, deny-by-default policy engine
+    │   ├── budgets.py            Cost/step ceilings
+    │   ├── connectors.py         Timeout · retries · circuit breaker
+    │   ├── tools.py              Tool registry + connector-backed tools + MockModel
+    │   ├── providers.py          Real model provider — Claude via the Anthropic API
+    │   ├── agent.py              The agent control loop
+    │   ├── workflow.py           Durable, crash-safe, idempotent engine
+    │   ├── orchestrator.py       Trigger dedup → run → resume
+    │   ├── example_run.py        Worked end-to-end example (offline)
+    │   └── example_run_live.py   Same pipeline, driven by a real Claude call
+    └── tests/                    21-test suite (crash-resume, isolation, dedup, policy, …)
 ```
 
 ## Where to start reading
 
 - **Executives / product**: [`docs/08-use-cases.md`](docs/08-use-cases.md) then [`docs/09-roadmap.md`](docs/09-roadmap.md).
 - **Architects**: [`docs/01-architecture.md`](docs/01-architecture.md).
-- **Engineers**: [`docs/02-components.md`](docs/02-components.md) and the [`reference/`](reference/) scaffold.
+- **Engineers**: [`docs/02-components.md`](docs/02-components.md) and the [`reference/`](reference/) implementation.
 - **Security / compliance**: [`docs/05-security-governance.md`](docs/05-security-governance.md).
 
-## Quick start (reference scaffold)
+## Quick start (reference implementation)
 
 ```bash
 cd reference
-python -m bass.example_run
+python -m bass.example_run                      # run the durable invoice-triage pipeline
+python -m unittest discover -s tests -t .       # run the 21-test suite (stdlib only)
 ```
 
-This runs a simulated "invoice triage" workflow end-to-end — no external API keys
-required — printing the traced event log, policy decisions, and the final result.
+The example fires an "invoice triage" trigger, persists a durable run to SQLite,
+and prints the traced event log read back from the store — policy decisions, the
+approval gate, and the final result.
+
+The [`reference/`](reference/) code is a **production-shaped** implementation of
+the control loop: durable, crash-safe, idempotent execution; a fail-closed policy
+gate; connector reliability; redaction; enforced tenant isolation; and budgets —
+with external infrastructure behind swappable interfaces (SQLite→Postgres,
+MockModel→Claude, env-secrets→vault). See [`reference/README.md`](reference/README.md).

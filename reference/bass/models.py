@@ -1,25 +1,19 @@
 """Core domain types.
 
-These mirror the entities in docs/03-data-model.md, trimmed to what the runnable
-example needs. Kept as plain dataclasses so the shapes are obvious.
+Plain, typed dataclasses. Persistence lives in `store.py`; these carry no I/O.
+Mirrors the entities in ../docs/03-data-model.md.
 """
 
 from __future__ import annotations
 
-import itertools
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional
 
 
-# --- identifiers ------------------------------------------------------------
-
-# Deterministic, monotonic ids so example output is stable and easy to read.
-_counter = itertools.count(1)
-
-
 def new_id(prefix: str) -> str:
-    return f"{prefix}_{next(_counter)}"
+    return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
 # --- enums ------------------------------------------------------------------
@@ -30,12 +24,20 @@ class RunStatus(str, Enum):
     WAITING_APPROVAL = "waiting_approval"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    CANCELED = "canceled"
 
 
 class PolicyEffect(str, Enum):
     ALLOW = "allow"
     DENY = "deny"
     REQUIRE_APPROVAL = "require_approval"
+
+
+class ApprovalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
 
 
 # --- tenancy ----------------------------------------------------------------
@@ -51,33 +53,32 @@ class Tenant:
 
 @dataclass
 class Tool:
-    """A single capability exposed to an agent, backed by a connector.
+    """A capability exposed to an agent, backed by a connector.
 
-    `side_effect=True` marks a mutating tool (subject to stricter policy).
-    `fn` is the connector call; in production it would hit an external system.
-    `input_schema` is the JSON Schema the model sees and validates against — it
-    is what makes tool arguments typed (docs/02-components.md § Tool contract).
+    `side_effect=True` marks a mutating tool (stricter policy, requires an
+    idempotency key on execution). `input_schema` is the typed contract the
+    model sees and the runtime validates against.
     """
     name: str
     description: str
+    connector: str                              # connector name that backs it
     fn: Callable[[dict], Any]
     side_effect: bool = False
     cost_usd: float = 0.0
     input_schema: dict[str, Any] = field(
-        default_factory=lambda: {"type": "object", "properties": {}}
-    )
+        default_factory=lambda: {"type": "object", "properties": {}})
 
 
 @dataclass
 class Agent:
-    """An LLM-driven worker: a role + instructions + a tool allow-list + guardrails."""
+    """An LLM worker: role + instructions + a least-privilege tool allow-list."""
     name: str
     role: str
     instructions: str
     model: str = "claude-sonnet-5"
     tools: list[str] = field(default_factory=list)   # allow-list of tool names
     max_steps: int = 8
-    # When set, the runtime asks the model for JSON and parses it to this shape.
+    max_tokens: int = 4096
     output_schema: Optional[dict[str, Any]] = None
 
 
@@ -85,11 +86,7 @@ class Agent:
 
 @dataclass
 class Step:
-    """One node in a workflow.
-
-    node_type: 'agent' | 'tool' | 'branch' | 'approval'
-    Fields used depend on node_type — see workflow.py for how each is executed.
-    """
+    """One node in a workflow: agent | tool | branch | approval | terminate."""
     id: str
     node_type: str
     # agent node
@@ -97,53 +94,53 @@ class Step:
     # tool node
     tool: Optional[str] = None
     args: dict[str, Any] = field(default_factory=dict)
-    # branch node: list of (predicate, goto_step_id); last may be (None, goto)
+    # branch node: [(predicate, goto_step_id)]; a None predicate is the else arm
     branches: list[tuple[Optional[Callable[[dict], bool]], str]] = field(default_factory=list)
     # approval node
     approvers: list[str] = field(default_factory=list)
-    # default next step (None => end of workflow)
+    # reliability
+    max_attempts: int = 3
+    compensate_with: Optional[str] = None       # step id to run to undo, on failure
+    # default next step (None ends the workflow)
     next: Optional[str] = None
 
 
 @dataclass
 class Workflow:
     name: str
-    steps: dict[str, Step]           # step_id -> Step
-    start: str                       # id of the first step
+    steps: dict[str, Step]
+    start: str
+    version: int = 1
     budget_usd: float = 1.0
+    max_steps: int = 50
     id: str = field(default_factory=lambda: new_id("wf"))
 
 
-# --- runtime ----------------------------------------------------------------
+# --- runtime records (hydrated from the store) ------------------------------
 
 @dataclass
 class Event:
-    """One immutable entry in the append-only trace."""
     run_id: str
+    tenant_id: str
     type: str
     payload: dict[str, Any]
     step_id: Optional[str] = None
+    actor: str = "system"
     cost_usd: float = 0.0
-    id: int = field(default_factory=lambda: next(_counter))
+    seq: int = 0                                 # assigned by the store (monotonic)
 
 
 @dataclass
 class Run:
-    workflow_id: str
     tenant_id: str
+    workflow_id: str
+    workflow_version: int
     trigger_event: dict[str, Any]
+    idempotency_key: str
     status: RunStatus = RunStatus.PENDING
-    context: dict[str, Any] = field(default_factory=dict)   # shared data bag
+    cursor_step: Optional[str] = None           # next step to execute (durable)
+    context: dict[str, Any] = field(default_factory=dict)
     cost_usd: float = 0.0
-    events: list[Event] = field(default_factory=list)
+    steps_used: int = 0
     result: Optional[dict[str, Any]] = None
     id: str = field(default_factory=lambda: new_id("run"))
-
-    def log(self, type: str, payload: dict, step_id: str | None = None,
-            cost_usd: float = 0.0) -> Event:
-        """Append to the trace and roll up cost."""
-        ev = Event(run_id=self.id, type=type, payload=payload,
-                   step_id=step_id, cost_usd=cost_usd)
-        self.events.append(ev)
-        self.cost_usd += cost_usd
-        return ev

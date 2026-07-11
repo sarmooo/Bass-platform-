@@ -1,14 +1,6 @@
-# The core scaffold and the offline example (bass.example_run) use only the Python
-# standard library, so they run anywhere with no install step.
+# Dependencies are declared in pyproject.toml. The core package and its test
+# suite need only the Python standard library.
 #
-# The live example (bass.example_run_live), which drives a real Claude call via
-# bass.providers.AnthropicModel, needs the Anthropic SDK:
-#
-#   anthropic
-#
-# A real deployment would add more, e.g.:
-#   fastapi uvicorn   # the API gateway
-#   sqlalchemy psycopg # Postgres state store
-#   pydantic          # schema validation
-#   temporalio        # durable workflow execution
-#   opentelemetry-sdk # tracing
+#   pip install -e .            # core (stdlib only)
+#   pip install -e ".[live]"    # + anthropic, for the real Claude provider
+#   pip install -e ".[dev]"     # + pytest, ruff, mypy (used in CI)

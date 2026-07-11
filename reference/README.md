@@ -1,30 +1,43 @@
-# Bass — Reference Scaffold
+# Bass — Reference Implementation
 
-A minimal, dependency-free Python implementation of the Bass core loop. It exists to
-make the architecture concrete: you can read it in one sitting and run it without any
-API keys.
+A compact but **production-shaped** implementation of the Bass core: durable,
+crash-safe, idempotent workflow execution with a fail-closed policy gate,
+connector reliability, secret/PII redaction, enforced tenant isolation, budgets,
+and structured observability.
 
-It demonstrates:
+External infrastructure sits behind interfaces with working defaults, so a
+deployment swaps the implementation without touching the engine:
 
-- **Domain models** (`models.py`) — the entities from `docs/03-data-model.md`.
-- **A policy engine** (`policy.py`) — the safety gate: allow / deny / require-approval.
-- **A tool registry** (`tools.py`) — typed, side-effect-flagged tools with a mock model.
-- **The agent loop** (`agent.py`) — reason → (policy check) → tool → repeat, fully traced.
-- **A real model provider** (`providers.py`) — Claude via the Anthropic API, native tool use.
-- **A deterministic workflow engine** (`workflow.py`) — agent/tool/branch/approval nodes.
-- **An orchestrator** (`orchestrator.py`) — trigger → workflow → run.
-- **Worked examples** (`example_run.py`, `example_run_live.py`) — invoice triage, end to end.
+| Concern | Interface | Reference default | Production swap |
+|---------|-----------|-------------------|-----------------|
+| State + event log | `store.Store` | `SQLiteStore` (WAL, ACID) | Postgres + row-level security |
+| Model | `respond()` | `tools.MockModel` | `providers.AnthropicModel` (Claude) |
+| Secrets | `secrets.SecretsProvider` | `EnvSecrets` | Vault / cloud KMS |
+| Connector | `connectors.Connector` | in-process example | Gmail, Salesforce, HTTP, DB |
+| Metrics | `observability.Metrics` | in-process counters | OpenTelemetry |
 
-The agent loop is written against a small `respond(agent, task, scratch)` interface,
-so the LLM is pluggable. Two implementations ship:
+## What's implemented (and tested)
 
-- `tools.MockModel` — deterministic and offline (the default).
-- `providers.AnthropicModel` — a real Claude call that passes the agent's tool
-  allow-list through the model's **native tool-use interface** and threads tool
-  results back into the conversation.
-
-Swapping one for the other is the *only* change: the loop, the policy gate, the
-trace, and the workflow engine are identical for both.
+- **Durable, crash-safe execution** (`workflow.py`, `store.py`) — a run's cursor,
+  context, cost, and new events advance in a single transaction after each step.
+  A process that dies mid-run resumes from the last committed cursor.
+- **Exactly-once side effects** — mutating tool steps consult an idempotency
+  ledger before acting and record their result after, so a crash-replay returns
+  the recorded result instead of acting twice.
+- **Fail-closed policy gate** (`policy.py`) — least-privilege allow-lists,
+  declarative versioned rules, deny-by-default for mutations, and denial when a
+  rule itself errors.
+- **Trigger deduplication** (`orchestrator.py`) — a redelivered event maps to the
+  same run via a stable idempotency key.
+- **Durable human approval** — high-value actions pause for a recorded decision.
+- **Connector reliability** (`connectors.py`) — timeout, bounded retries with
+  backoff, and a circuit breaker.
+- **Redaction at write time** (`redaction.py`) — secrets/PII are masked before
+  anything is persisted or logged.
+- **Enforced tenant isolation** (`store.py`) — every read/write is tenant-scoped;
+  a cross-tenant access raises rather than leaking.
+- **Budgets** (`budgets.py`) — cost and step ceilings fail a run closed.
+- **Structured logging + metrics** (`observability.py`).
 
 ## Run the offline example
 
@@ -33,21 +46,39 @@ cd reference
 python -m bass.example_run
 ```
 
-No third-party dependencies required. You should see a traced run: policy
-decisions, a read-only tool call, an approval that gets granted for the $8,200
-AP entry, and the final result.
+Fires an invoice-triage trigger, persists to SQLite, and prints the durable trace
+read back from the store. The $8,200 invoice exceeds the $5,000 threshold, so
+posting the AP entry pauses for approval.
+
+## Run the tests
+
+```bash
+cd reference
+python -m unittest discover -s tests -t .      # zero dependencies
+# or, with dev tooling:  pip install -e ".[dev]" && pytest -q
+```
+
+21 tests cover the properties above, including a crash-before-checkpoint →
+resume → **exactly-once** scenario and cross-tenant isolation.
 
 ## Run the live example (real Claude call)
 
 ```bash
 cd reference
-pip install anthropic
-export ANTHROPIC_API_KEY=sk-ant-...     # or: ant auth login
+pip install -e ".[live]"
+export ANTHROPIC_API_KEY=sk-ant-...            # or: ant auth login
 python -m bass.example_run_live
 ```
 
-Same workflow, but the `invoice_extractor` agent is driven by
-`providers.AnthropicModel`. The extractor really parses the raw invoice, may call
-`lookup_vendor` via native tool use, and returns structured JSON — then the
-deterministic engine validates, branches, and posts behind the same approval
-gate. This makes a real, billed API call.
+Same durable pipeline, but the extractor agent is driven by
+`providers.AnthropicModel` — real native tool use, structured JSON output, and
+per-model cost roll-up. Makes a real, billed API call.
+
+## What still requires real infrastructure
+
+This is a faithful single-process implementation of the control loop. A full
+enterprise deployment additionally needs: managed Postgres with RLS (swap
+`Store`), a durable-execution backend or worker fleet for horizontal scale, a
+KMS-backed vault (swap `SecretsProvider`), real SaaS connectors, an API gateway
+with SSO/RBAC, and an evaluation + observability stack. Each is a documented swap
+behind the interfaces above — see `../docs/07-deployment.md`.
