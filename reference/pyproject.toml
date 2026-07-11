@@ -12,7 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 # The live Claude provider (bass.providers.AnthropicModel).
-live = ["anthropic>=0.40"]
+live = ["anthropic>=0.116.0"]
 # The PostgreSQL state layer (bass.store_postgres.PostgresStore).
 postgres = ["psycopg[binary]>=3.1"]
 # The HTTP API (bass.api). Auth (bass.auth) is stdlib-only, no crypto dependency.
