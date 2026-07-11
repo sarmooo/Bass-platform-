@@ -33,6 +33,7 @@ from .observability import Metrics, get_logger, set_trace_id
 from .policy import PolicyEngine
 from .store import Store
 from .tools import ToolRegistry
+from .tracing import span
 
 log = get_logger("engine")
 
@@ -88,11 +89,17 @@ class WorkflowEngine:
         run.status = RunStatus.RUNNING
         step_id = run.cursor_step if run.cursor_step is not None else wf.start
 
-        try:
-            self._drive(run, wf, budget, step_id)   # returns None at completion
-        except _Paused:
-            self.metrics.incr("runs.paused")
-            return run                           # WAITING_APPROVAL already persisted
+        with span("bass.run", run_id=run.id, tenant_id=run.tenant_id,
+                  workflow=wf.name) as sp:
+            try:
+                self._drive(run, wf, budget, step_id)   # returns None at completion
+            except _Paused:
+                self.metrics.incr("runs.paused")
+                if sp is not None:
+                    sp.set_attribute("bass.status", run.status.value)
+                return run                       # WAITING_APPROVAL already persisted
+            if sp is not None:
+                sp.set_attribute("bass.status", run.status.value)
 
         self.metrics.incr("runs.succeeded")
         return run
@@ -117,7 +124,8 @@ class WorkflowEngine:
                       {"entering_step": step.id, "type": step.node_type}, step_id=step.id)
 
             try:
-                next_id = self._run_step_with_retry(step, run, wf)
+                with span("bass.step", step_id=step.id, node_type=step.node_type):
+                    next_id = self._run_step_with_retry(step, run, wf)
             except PolicyDenied as exc:
                 run.status = RunStatus.FAILED
                 self.emit(run, "error", {"reason": "policy denied", "detail": str(exc)})

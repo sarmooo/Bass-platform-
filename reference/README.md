@@ -39,6 +39,9 @@ deployment swaps the implementation without touching the engine:
   a cross-tenant access raises rather than leaking.
 - **Budgets** (`budgets.py`) — cost and step ceilings fail a run closed.
 - **Structured logging + metrics** (`observability.py`).
+- **OpenTelemetry tracing** (`tracing.py`) — a span per run and per step (attributes
+  `bass.run_id`, `bass.status`, `bass.node_type`, …); no-op unless the `[otel]` extra
+  is installed. Verified with an in-memory exporter in `tests/test_otel.py`.
 - **Real HTTP connector** (`connectors.http_call`) — retries 5xx/connection
   errors as transient, returns 4xx; integration-tested against a live local
   server (`tests/test_connectors_http.py`).
