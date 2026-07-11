@@ -1,0 +1,70 @@
+name: Deploy
+
+# Environment-gated deploy to Kubernetes via the Helm chart. The `production`
+# GitHub Environment carries the approval gate (required reviewers) and the
+# deploy secrets — configure it in repo Settings → Environments. The migration
+# Job (a pre-upgrade Helm hook) applies schema changes before pods roll out.
+#
+# Triggers: automatically when a Release is published, or on demand. Without a
+# KUBE_CONFIG secret the job renders a client-side dry-run instead of applying,
+# so the workflow is safe to run before a cluster exists.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy"
+        required: true
+        default: "latest"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: helm upgrade (gated on the production environment)
+    runs-on: ubuntu-latest
+    environment: production          # required-reviewer approval gate lives here
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+      - name: Resolve inputs
+        id: cfg
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.image_tag }}
+        run: echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+      - name: Configure kubeconfig (if provided)
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          if [ -n "$KUBE_CONFIG" ]; then
+            mkdir -p ~/.kube
+            echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
+            echo "HAVE_CLUSTER=1" >> "$GITHUB_ENV"
+          else
+            echo "::notice::No KUBE_CONFIG secret set — running a client-side dry-run."
+            echo "HAVE_CLUSTER=0" >> "$GITHUB_ENV"
+          fi
+      - name: Deploy (or dry-run)
+        env:
+          TAG: ${{ steps.cfg.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ARGS=(deploy/helm/bass
+            --namespace bass
+            --set image.tag="${TAG}"
+            --set secret.existingSecret=bass-prod-secret
+            --set autoscaling.enabled=true
+            --set ingress.enabled=true)
+          if [ "${HAVE_CLUSTER}" = "1" ]; then
+            helm upgrade --install bass "${ARGS[@]}" --create-namespace --wait --timeout 5m
+            helm -n bass status bass
+          else
+            # No cluster: render + client dry-run to validate the release would apply.
+            helm upgrade --install bass "${ARGS[@]}" --dry-run=client > /dev/null
+            echo "Dry-run OK: release would deploy image tag '${TAG}'."
+          fi

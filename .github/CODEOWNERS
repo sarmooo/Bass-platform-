@@ -1,0 +1,16 @@
+# Code ownership — GitHub requests a review from the listed owners on any PR
+# touching the matching paths. Enforce via branch protection ("Require review
+# from Code Owners"). See docs/11-supply-chain-and-governance.md.
+
+# Default owner for everything.
+*                       @sarmooo
+
+# The durable engine and state layer are the highest-risk surfaces.
+/reference/bass/workflow.py      @sarmooo
+/reference/bass/store.py         @sarmooo
+/reference/bass/store_postgres.py @sarmooo
+/reference/bass/migrate.py       @sarmooo
+
+# CI, supply chain, and deployment.
+/.github/                @sarmooo
+/deploy/                 @sarmooo

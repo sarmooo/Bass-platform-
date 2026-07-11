@@ -129,6 +129,20 @@ jobs:
           context: .
           load: true
           tags: ${{ env.IMAGE }}:ci
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin
+          trivy --version
+      - name: Scan image for fixable CRITICAL vulnerabilities (gating)
+        run: |
+          trivy image --scanners vuln --ignore-unfixed --severity CRITICAL \
+            --exit-code 1 --format table "${IMAGE}:ci"
+      - name: Full vulnerability report (HIGH+CRITICAL, advisory)
+        if: always()
+        run: |
+          trivy image --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 0 --format table "${IMAGE}:ci" || true
       - name: Boot the container
         run: |
           docker run -d --name bass -e BASS_JWT_SECRET=ci-secret \

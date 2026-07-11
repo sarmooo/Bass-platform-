@@ -156,7 +156,11 @@ Deployment artifacts live in [`../deploy`](../deploy) and are validated in CI
   `schema_migrations`. Tested in `tests/test_migrate.py`.
 
 The [operations runbook](../docs/10-operations.md) covers deploy, migrate, roll
-back, scale, incident response, and backup/restore.
+back, scale, incident response, and backup/restore. The
+[supply-chain & governance](../docs/11-supply-chain-and-governance.md) chapter
+covers the PR → signed release → gated deploy pipeline (required checks,
+CODEOWNERS, Trivy image scan, cosign verification, the `production` environment
+approval gate) and the settings that live in repo admin.
 
 ## What still requires real infrastructure
 
