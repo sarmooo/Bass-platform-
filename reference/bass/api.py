@@ -86,6 +86,13 @@ class ApiService:
     def trace(self, tenant_id: str, run_id: str) -> list:
         return self.store.list_events(tenant_id, run_id)
 
+    def cancel(self, tenant_id: str, run_id: str) -> Run:
+        self.store.cancel_run(tenant_id, run_id)
+        run = self.store.load_run(tenant_id, run_id)
+        if run is None:
+            raise KeyError(run_id)
+        return run
+
     def resolve_approval(self, tenant_id: str, run_id: str, approval_id: str,
                          approved: bool, decided_by: str, note: str = "") -> Run:
         run = self.store.load_run(tenant_id, run_id)          # tenant-scoped
@@ -160,6 +167,15 @@ def create_app(service: ApiService):
         except TenantIsolationError:
             raise HTTPException(status_code=404, detail="not found")
         return {"events": [_event_view(e) for e in events]}
+
+    @app.post("/v1/runs/{run_id}/cancel")
+    def cancel(run_id: str,
+               p: Principal = Depends(require("owner", "admin", "builder"))) -> dict:
+        try:
+            run = service.cancel(p.tenant_id, run_id)
+        except (KeyError, TenantIsolationError):
+            raise HTTPException(status_code=404, detail="not found")
+        return _run_view(run)
 
     @app.post("/v1/runs/{run_id}/approvals/{approval_id}")
     def resolve(run_id: str, approval_id: str, body: dict,

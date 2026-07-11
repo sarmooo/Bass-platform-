@@ -87,6 +87,7 @@ class Store(Protocol):
                          decided_by: str, note: str = "") -> None: ...
     def latest_approval(self, tenant_id: str, run_id: str,
                         step_id: str) -> Optional[tuple[str, str]]: ...
+    def cancel_run(self, tenant_id: str, run_id: str) -> bool: ...
 
 
 class SQLiteStore:
@@ -184,6 +185,29 @@ class SQLiteStore:
         return [Event(run_id=r["run_id"], tenant_id=r["tenant_id"], step_id=r["step_id"],
                       type=r["type"], actor=r["actor"], payload=json.loads(r["payload_json"]),
                       cost_usd=r["cost_usd"], seq=r["seq"]) for r in rows]
+
+    def cancel_run(self, tenant_id: str, run_id: str) -> bool:
+        """Cancel a non-terminal run. Returns False if it is already terminal or
+        missing; raises TenantIsolationError on a cross-tenant target."""
+        terminal = (RunStatus.SUCCEEDED.value, RunStatus.FAILED.value,
+                    RunStatus.CANCELED.value)
+        with self._lock, self._conn:
+            row = self._conn.execute(
+                "SELECT status FROM runs WHERE id=? AND tenant_id=?",
+                (run_id, tenant_id)).fetchone()
+            if row is None:
+                self._assert_owns(tenant_id, run_id)   # raises if cross-tenant
+                return False
+            if row["status"] in terminal:
+                return False
+            self._conn.execute(
+                "UPDATE runs SET status=?, updated_at=? WHERE id=? AND tenant_id=?",
+                (RunStatus.CANCELED.value, time.time(), run_id, tenant_id))
+            self._conn.execute(
+                "INSERT INTO events (run_id, tenant_id, step_id, type, actor, "
+                "payload_json, cost_usd, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                (run_id, tenant_id, None, "run_canceled", "user", "{}", 0, time.time()))
+        return True
 
     # -- side-effect ledger (exactly-once) ---------------------------------
 

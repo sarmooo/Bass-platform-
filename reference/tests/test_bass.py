@@ -145,6 +145,16 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(TenantIsolationError):
             self.store.get_effect("tenant_b", "k")
 
+    def test_cancel_run(self):
+        r, _ = self.store.create_or_get_run(_run_seed(self.wf, "tenant_a", "cancel"))
+        self.assertTrue(self.store.cancel_run("tenant_a", r.id))
+        self.assertEqual(self.store.load_run("tenant_a", r.id).status, RunStatus.CANCELED)
+        # already terminal → cannot cancel again
+        self.assertFalse(self.store.cancel_run("tenant_a", r.id))
+        # cross-tenant cancel is refused
+        with self.assertRaises(TenantIsolationError):
+            self.store.cancel_run("tenant_b", r.id)
+
 
 class ConnectorTests(unittest.TestCase):
     def _cfg(self, **kw):

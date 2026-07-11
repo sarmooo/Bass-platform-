@@ -166,6 +166,27 @@ class PostgresStore:
                       type=r["type"], actor=r["actor"], payload=json.loads(r["payload_json"]),
                       cost_usd=r["cost_usd"], seq=r["seq"]) for r in rows]
 
+    def cancel_run(self, tenant_id: str, run_id: str) -> bool:
+        terminal = (RunStatus.SUCCEEDED.value, RunStatus.FAILED.value,
+                    RunStatus.CANCELED.value)
+        with self._lock, self._conn.transaction():
+            row = self._conn.execute(
+                "SELECT status FROM runs WHERE id=%s AND tenant_id=%s",
+                (run_id, tenant_id)).fetchone()
+            if row is None:
+                self._assert_owns(tenant_id, run_id)
+                return False
+            if row["status"] in terminal:
+                return False
+            self._conn.execute(
+                "UPDATE runs SET status=%s, updated_at=%s WHERE id=%s AND tenant_id=%s",
+                (RunStatus.CANCELED.value, time.time(), run_id, tenant_id))
+            self._conn.execute(
+                "INSERT INTO events (run_id, tenant_id, step_id, type, actor, "
+                "payload_json, cost_usd, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (run_id, tenant_id, None, "run_canceled", "user", "{}", 0, time.time()))
+        return True
+
     # -- side-effect ledger ------------------------------------------------
 
     def get_effect(self, tenant_id: str, key: str) -> Optional[Any]:

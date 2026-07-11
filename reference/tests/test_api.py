@@ -102,6 +102,16 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(r.json()["status"], "failed")
         self.assertEqual(self.acct.count(), 0)
 
+    def test_cancel_waiting_run(self):
+        run_id = self._fire().json()["run_id"]        # pauses at approval
+        r = self.client.post(f"/v1/runs/{run_id}/cancel", headers=_auth(_token()))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "canceled")
+        self.assertEqual(self.acct.count(), 0)         # nothing posted
+        # a canceled run reads back canceled
+        got = self.client.get(f"/v1/runs/{run_id}", headers=_auth(_token())).json()
+        self.assertEqual(got["status"], "canceled")
+
     def test_tenant_isolation_across_tokens(self):
         run_id = self._fire().json()["run_id"]
         other = _token(tenant="other-co", subject="u9", roles=("viewer",))
