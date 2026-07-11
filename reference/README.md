@@ -47,6 +47,11 @@ deployment swaps the implementation without touching the engine:
   layer in `tests/test_rls.py`.
 - **Concurrency-safe** — exactly-once under contention (32 concurrent fires of one
   trigger → one run, one side effect) in `tests/test_concurrency.py`.
+- **Scheduled (cron) triggers** (`schedule.py`) — a stdlib 5-field cron matcher and
+  a scheduler whose firings dedup to once-per-minute across replicas; completes the
+  event/manual/schedule trigger model. Tested in `tests/test_schedule.py`.
+- **Temporal durable execution** (`temporal_adapter.py`) — a run driven by a real
+  Temporal workflow; verified against Temporal's test server in CI.
 
 ## Run the offline example
 
