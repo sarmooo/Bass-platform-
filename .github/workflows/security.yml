@@ -1,0 +1,39 @@
+name: Security
+
+# GHAS-independent security scans that gate every push: Python SAST (bandit) and
+# secret scanning (gitleaks). Complements the source/image scans already in ci.yml
+# (pip-audit, Trivy) and the advisory Scorecard.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bandit:
+    name: Python SAST (bandit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install bandit
+        run: pip install "bandit[toml]"
+      - name: Scan (medium+ severity gates the build)
+        run: bandit -r bass -ll
+
+  gitleaks:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan the working tree for committed secrets
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --no-git --source=/repo --config=/repo/.gitleaks.toml --redact -v

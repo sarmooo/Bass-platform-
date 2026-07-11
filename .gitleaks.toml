@@ -1,0 +1,21 @@
+# gitleaks configuration. Extends the default ruleset and allowlists the places
+# that legitimately contain non-secret fixture strings (test tokens like
+# "ci-secret", the redaction regex literals) so scanning stays signal over noise.
+# Real application source under reference/bass is still fully scanned.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "CI/test fixtures and redaction patterns — not real credentials"
+paths = [
+  '''reference/tests/.*''',
+  '''\.github/workflows/.*''',
+  '''deploy/.*''',
+  '''reference/loadtest/.*''',
+]
+regexTarget = "match"
+regexes = [
+  '''sk-ant-\[A-Za-z0-9''',          # the redaction regex literal, not an API key
+  '''(ci|e2e|kind|dev|test|rl)-secret''',
+]

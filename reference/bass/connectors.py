@@ -132,7 +132,7 @@ def http_call(args: dict) -> Any:
         headers.setdefault("Content-Type", "application/json")
     req = urllib.request.Request(args["url"], data=data, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req) as resp:      # noqa: S310 (trusted callers)
+        with urllib.request.urlopen(req) as resp:      # noqa: S310  # nosec B310 (trusted callers)
             return {"status": resp.status, "body": resp.read().decode()}
     except urllib.error.HTTPError as exc:
         if exc.code >= 500:

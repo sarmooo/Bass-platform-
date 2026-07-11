@@ -107,7 +107,9 @@ class Migrator:
                 try:
                     self._exec_ddl(conn, m.sql)
                     conn.execute(
-                        f"INSERT INTO schema_migrations (id, applied_at) "
+                        # nosec B608 — {self.ph} is a fixed placeholder ('?'/'%s'),
+                        # not user input; the values are bound parameters.
+                        f"INSERT INTO schema_migrations (id, applied_at) "  # nosec B608
                         f"VALUES ({self.ph}, {self.ph})", (m.id, time.time()))
                     conn.commit()               # DDL + ledger row commit together
                 except Exception:
