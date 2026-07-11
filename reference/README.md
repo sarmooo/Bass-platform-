@@ -137,8 +137,10 @@ runs four jobs on every push: **unit** (ruff + mypy + pytest with an 80% coverag
 gate + `pip-audit`), **integration** (the suite against a real PostgreSQL
 container plus a real Redis container for the distributed rate limiter),
 **temporal** (a run driven by Temporal's test server), and **docker** (build the
-image, smoke-test that `/healthz` responds, then publish to GHCR). Dependabot
-keeps pip and Actions dependencies current.
+image, smoke-test `/healthz`, run a **k6 load-smoke** — 10 VUs firing authenticated
+runs with p95/error-rate gates — then publish to GHCR with an **SBOM + SLSA
+provenance** attestation and a **cosign keyless signature**, verified in-workflow).
+Dependabot keeps pip and Actions dependencies current.
 
 ## What still requires real infrastructure
 
