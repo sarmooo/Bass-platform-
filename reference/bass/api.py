@@ -118,8 +118,14 @@ def _event_view(ev: Any) -> dict:
 
 def create_app(service: ApiService):
     from fastapi import Depends, FastAPI, Header, HTTPException
+    from fastapi.responses import HTMLResponse
 
     app = FastAPI(title="Bass API", version="0.1.0")
+
+    @app.get("/", response_class=HTMLResponse)
+    def console() -> str:
+        from .dashboard import CONSOLE_HTML       # the operator UI
+        return CONSOLE_HTML
 
     def principal(authorization: str = Header(default="")) -> Principal:
         if not authorization.startswith("Bearer "):

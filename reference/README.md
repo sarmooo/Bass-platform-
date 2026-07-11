@@ -95,6 +95,10 @@ export BASS_JWT_SECRET=dev-secret BASS_DB_PATH=bass.db
 uvicorn --factory bass.api:build_default_app
 ```
 
+Open `http://localhost:8000/` for the **operator console** (`dashboard.py`) — a
+self-contained web UI to list runs, read traces, and approve/cancel, talking to
+the same JSON endpoints below.
+
 A FastAPI service over the engine: `POST /v1/workflows/{name}/runs` (fire),
 `GET /v1/runs/{id}` and `/trace`, and `POST /v1/runs/{id}/approvals/{approval_id}`
 (resolve). Every request runs under a bearer-JWT `Principal`; the `tenant_id`

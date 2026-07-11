@@ -61,6 +61,13 @@ class ApiTests(unittest.TestCase):
     def test_healthz(self):
         self.assertEqual(self.client.get("/healthz").json(), {"status": "ok"})
 
+    def test_operator_console_served(self):
+        r = self.client.get("/")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/html", r.headers["content-type"])
+        self.assertIn("Operator Console", r.text)
+        self.assertIn("/v1/runs", r.text)          # the UI calls the real endpoints
+
     def test_readyz(self):
         r = self.client.get("/readyz")
         self.assertEqual(r.status_code, 200)
