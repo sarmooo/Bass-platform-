@@ -1,0 +1,85 @@
+name: API quality
+
+# API contract + performance checks: the committed OpenAPI spec must stay in
+# sync with the routes, microbenchmarks record hot-path latency, and schemathesis
+# fuzzes the API against its own schema.
+
+on:
+  push:
+    paths:
+      - "reference/**"
+      - ".github/workflows/api-quality.yml"
+  pull_request:
+    paths:
+      - "reference/**"
+      - ".github/workflows/api-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  openapi-drift:
+    name: OpenAPI spec in sync
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[api]"
+      - name: Regenerate and diff the committed spec
+        run: python -m scripts.export_openapi --check
+
+  benchmarks:
+    name: Microbenchmarks (hot paths)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev,api]"
+      - name: Run benchmarks and record timings
+        run: pytest tests/test_benchmarks.py --benchmark-only --benchmark-json=benchmark.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks
+          path: reference/benchmark.json
+          if-no-files-found: warn
+
+  schemathesis:
+    name: Schema fuzzing (schemathesis, advisory)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[api]" schemathesis
+      - name: Start the API
+        env:
+          BASS_JWT_SECRET: st-secret
+        run: |
+          nohup uvicorn --factory bass.api:build_default_app \
+            --host 127.0.0.1 --port 8000 > /tmp/uvicorn.log 2>&1 &
+          for _ in $(seq 1 30); do curl -sf http://127.0.0.1:8000/healthz && break; sleep 1; done
+      - name: Fuzz the API against its schema (advisory)
+        continue-on-error: true
+        env:
+          BASS_JWT_SECRET: st-secret
+        run: |
+          TOKEN=$(python -c "from bass.auth import mint_token; print(mint_token('st-secret','acme','u1',['owner','admin','builder','approver']))")
+          schemathesis run http://127.0.0.1:8000/openapi.json \
+            --header "Authorization: Bearer $TOKEN" --checks all || true
+      - name: Server logs
+        if: always()
+        run: cat /tmp/uvicorn.log || true
