@@ -5,6 +5,10 @@ on:
     branches: ["**"]
   pull_request:
 
+# Least privilege: CI only reads the repo to lint and test.
+permissions:
+  contents: read
+
 jobs:
   unit:
     name: Lint & unit tests (SQLite)
