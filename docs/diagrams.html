@@ -1,0 +1,389 @@
+<title>Bass — Architecture Diagrams</title>
+<style>
+  :root {
+    --ground: #f6f8fa; --panel: #ffffff; --panel-2: #f0f3f7;
+    --ink: #16202e; --muted: #566579; --faint: #8b99ab;
+    --line: #d6dde6; --line-strong: #b9c4d1;
+    --accent: #0e7490; --accent-2: #0891b2; --accent-soft: #d7eef4;
+    --human: #b45309; --human-soft: #f7ecd6;
+    --deny: #b42318; --deny-soft: #f7dedb;
+    --ok: #15803d; --ok-soft: #d9efe1;
+    --shadow: 0 1px 2px rgba(20,32,46,.06), 0 8px 24px rgba(20,32,46,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0a0e15; --panel: #121a25; --panel-2: #0f1620;
+      --ink: #e7eef6; --muted: #94a3b7; --faint: #64748b;
+      --line: #243141; --line-strong: #33445a;
+      --accent: #38bdf8; --accent-2: #22d3ee; --accent-soft: #0d2b39;
+      --human: #f59e0b; --human-soft: #3a2a0c;
+      --deny: #f87171; --deny-soft: #3a1714;
+      --ok: #4ade80; --ok-soft: #10301d;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f6f8fa; --panel: #ffffff; --panel-2: #f0f3f7;
+    --ink: #16202e; --muted: #566579; --faint: #8b99ab;
+    --line: #d6dde6; --line-strong: #b9c4d1;
+    --accent: #0e7490; --accent-2: #0891b2; --accent-soft: #d7eef4;
+    --human: #b45309; --human-soft: #f7ecd6;
+    --deny: #b42318; --deny-soft: #f7dedb;
+    --ok: #15803d; --ok-soft: #d9efe1;
+    --shadow: 0 1px 2px rgba(20,32,46,.06), 0 8px 24px rgba(20,32,46,.05);
+  }
+  :root[data-theme="dark"] {
+    --ground: #0a0e15; --panel: #121a25; --panel-2: #0f1620;
+    --ink: #e7eef6; --muted: #94a3b7; --faint: #64748b;
+    --line: #243141; --line-strong: #33445a;
+    --accent: #38bdf8; --accent-2: #22d3ee; --accent-soft: #0d2b39;
+    --human: #f59e0b; --human-soft: #3a2a0c;
+    --deny: #f87171; --deny-soft: #3a1714;
+    --ok: #4ade80; --ok-soft: #10301d;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 96px; }
+
+  /* ---- header ---- */
+  header { border-bottom: 1px solid var(--line); background: linear-gradient(180deg, var(--panel-2), var(--ground)); }
+  .head-inner { max-width: 1080px; margin: 0 auto; padding: 44px 24px 34px; }
+  .kicker {
+    font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 14px;
+  }
+  h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; margin: 0 0 12px; letter-spacing: -.02em; text-wrap: balance; }
+  h1 .sub { color: var(--muted); font-weight: 600; }
+  .thesis { font-size: clamp(15px, 2vw, 18px); color: var(--muted); max-width: 62ch; margin: 0 0 26px; }
+  .concepts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 8px;
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    padding: 6px 13px; background: var(--panel); font-size: 13px; box-shadow: var(--shadow);
+  }
+  .chip b { color: var(--ink); }
+  .chip .n { font-family: ui-monospace, monospace; font-size: 11px; color: var(--accent); }
+
+  /* ---- section scaffolding ---- */
+  section { margin-top: 60px; }
+  .eyebrow {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 6px;
+    font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .eyebrow::before { content: ""; width: 22px; height: 1px; background: var(--line-strong); }
+  h2 { font-size: clamp(21px, 3vw, 27px); margin: 0 0 8px; letter-spacing: -.01em; }
+  .lede { color: var(--muted); margin: 0 0 26px; max-width: 68ch; }
+
+  .scroll { overflow-x: auto; padding-bottom: 4px; }
+
+  /* ---- layered architecture ---- */
+  .stack { display: flex; flex-direction: column; align-items: stretch; gap: 0; min-width: 640px; }
+  .layer {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; box-shadow: var(--shadow); position: relative;
+  }
+  .layer + .layer { margin-top: 30px; }
+  /* connector between stacked layers */
+  .layer + .layer::before {
+    content: ""; position: absolute; top: -24px; left: 50%; width: 2px; height: 18px;
+    background: var(--line-strong); transform: translateX(-50%);
+  }
+  .layer + .layer::after {
+    content: ""; position: absolute; top: -10px; left: 50%; width: 8px; height: 8px;
+    border-right: 2px solid var(--line-strong); border-bottom: 2px solid var(--line-strong);
+    transform: translateX(-50%) rotate(45deg);
+  }
+  .layer-label {
+    font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint); margin-bottom: 10px;
+  }
+  .cells { display: flex; flex-wrap: wrap; gap: 10px; }
+  .cell {
+    flex: 1 1 0; min-width: 150px; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 9px; padding: 11px 13px;
+  }
+  .cell .t { font-weight: 650; font-size: 14px; margin-bottom: 3px; }
+  .cell .d { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+  .cell.svc { border-left: 3px solid var(--accent); }
+  .cell.gate { border-left: 3px solid var(--human); }
+  .cell.store { border-left: 3px solid var(--faint); background: transparent; }
+
+  .layer.edge { border-color: var(--accent); background: linear-gradient(180deg, var(--accent-soft), var(--panel)); }
+  .flowrow { display: flex; align-items: stretch; gap: 10px; }
+  .flowrow .cell { flex: 1 1 0; }
+
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 14px; padding-left: 14px; border-left: 2px solid var(--accent); }
+
+  /* ---- lifecycle stepper ---- */
+  .steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; min-width: 760px; }
+  .step { position: relative; padding: 0 14px; }
+  .step .num {
+    font-family: ui-monospace, monospace; font-size: 12px; color: var(--accent);
+    width: 26px; height: 26px; display: grid; place-items: center;
+    border: 1.5px solid var(--accent); border-radius: 50%; background: var(--panel); position: relative; z-index: 1;
+  }
+  .step .bar { position: absolute; top: 13px; left: 50%; right: -50%; height: 1.5px; background: var(--line-strong); }
+  .step:last-child .bar { display: none; }
+  .step .st { font-weight: 650; font-size: 13.5px; margin: 12px 0 4px; }
+  .step .sd { font-size: 12px; color: var(--muted); }
+
+  /* ---- node legend ---- */
+  .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .node {
+    border: 1px solid var(--line); border-radius: 9px; padding: 12px 13px; background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+  .node .tag {
+    font-family: ui-monospace, monospace; font-size: 12px; padding: 2px 8px; border-radius: 5px;
+    background: var(--panel-2); border: 1px solid var(--line); display: inline-block; margin-bottom: 8px;
+  }
+  .node .nd { font-size: 12.5px; color: var(--muted); }
+  .node.agent .tag { color: var(--accent); border-color: var(--accent); }
+  .node.tool .tag  { color: var(--ink); }
+  .node.approval .tag { color: var(--human); border-color: var(--human); }
+  .node.branch .tag { color: var(--faint); }
+
+  /* ---- decision states ---- */
+  .decisions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .decision { flex: 1 1 200px; border-radius: 10px; padding: 13px 15px; border: 1px solid; }
+  .decision .dh { font-family: ui-monospace, monospace; font-weight: 700; font-size: 13px; letter-spacing: .04em; }
+  .decision .dd { font-size: 12.5px; margin-top: 4px; }
+  .d-allow { border-color: var(--ok); background: var(--ok-soft); }
+  .d-allow .dh { color: var(--ok); }
+  .d-approve { border-color: var(--human); background: var(--human-soft); }
+  .d-approve .dh { color: var(--human); }
+  .d-deny { border-color: var(--deny); background: var(--deny-soft); }
+  .d-deny .dh { color: var(--deny); }
+
+  /* ---- trace timeline ---- */
+  .trace { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); box-shadow: var(--shadow); }
+  .trace-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; background: var(--panel-2); border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, monospace; font-size: 12.5px;
+  }
+  .trace-head .ok { color: var(--ok); font-weight: 700; }
+  .ev { display: grid; grid-template-columns: 44px 168px 1fr; gap: 12px; align-items: baseline;
+        padding: 9px 16px; border-top: 1px solid var(--line); font-size: 13px; }
+  .ev:first-child { border-top: none; }
+  .ev .id { font-family: ui-monospace, monospace; color: var(--faint); font-size: 12px; }
+  .ev .ty { font-family: ui-monospace, monospace; font-size: 12px; }
+  .ev .pl { color: var(--muted); font-size: 12.5px; }
+  .ev .pl code { font-family: ui-monospace, monospace; color: var(--ink); background: var(--panel-2);
+                 padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+  .ev.hl-agent  .ty { color: var(--accent); }
+  .ev.hl-gate   { background: var(--human-soft); }
+  .ev.hl-gate   .ty { color: var(--human); font-weight: 650; }
+  .ev.hl-ok     .ty { color: var(--ok); }
+  .ev .cost { color: var(--faint); font-family: ui-monospace, monospace; font-size: 11px; }
+  .annot { padding: 10px 16px; background: var(--accent-soft); border-top: 1px solid var(--line);
+           font-size: 12.5px; color: var(--ink); }
+  .annot b { color: var(--accent); }
+
+  footer { margin-top: 70px; padding-top: 22px; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: 13px; }
+  footer .mono { color: var(--faint); }
+  a { color: var(--accent); }
+
+  @media (max-width: 560px) {
+    .ev { grid-template-columns: 34px 1fr; }
+    .ev .pl { grid-column: 1 / -1; padding-left: 46px; }
+  }
+</style>
+
+<header>
+  <div class="head-inner">
+    <p class="kicker">Bass · Enterprise AI Automation Platform</p>
+    <h1>Automations that <span class="sub">reason, act, and stay accountable.</span></h1>
+    <p class="thesis">
+      Companies describe a process once; Bass runs it on every trigger — AI agents that reason and
+      call tools, sequenced by a deterministic engine, gated by policy and human approval, and
+      recorded as a replayable trace. The core idea: keep orchestration deterministic and confine
+      non-determinism to individual steps.
+    </p>
+    <div class="concepts">
+      <span class="chip"><span class="n mono">01</span> <b>Connector</b></span>
+      <span class="chip"><span class="n mono">02</span> <b>Tool</b></span>
+      <span class="chip"><span class="n mono">03</span> <b>Agent</b></span>
+      <span class="chip"><span class="n mono">04</span> <b>Workflow</b></span>
+      <span class="chip"><span class="n mono">05</span> <b>Trigger</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section>
+    <p class="eyebrow">System architecture</p>
+    <h2>Layered, single-responsibility services</h2>
+    <p class="lede">Each layer talks to the next through a stable contract, so any one piece can be
+      scaled or replaced on its own. The outside world enters at the top; the source-of-truth stores
+      sit at the bottom.</p>
+
+    <div class="scroll">
+      <div class="stack">
+
+        <div class="layer">
+          <div class="layer-label">Clients &amp; ingestion</div>
+          <div class="cells">
+            <div class="cell"><div class="t">Web console</div><div class="d">Build &amp; monitor</div></div>
+            <div class="cell"><div class="t">Chat / Email</div><div class="d">Slack, Teams, inbox</div></div>
+            <div class="cell"><div class="t">REST + SDK</div><div class="d">Embed automations</div></div>
+            <div class="cell"><div class="t">Webhooks</div><div class="d">External events</div></div>
+          </div>
+        </div>
+
+        <div class="layer edge">
+          <div class="layer-label">API gateway / edge</div>
+          <div class="cells">
+            <div class="cell"><div class="t">AuthN / AuthZ</div><div class="d">OIDC · SAML · API keys</div></div>
+            <div class="cell"><div class="t">Rate limit</div><div class="d">Per-tenant quotas</div></div>
+            <div class="cell"><div class="t">Tenant routing</div><div class="d">Isolated partitions</div></div>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-label">Control plane — trigger → orchestrate → execute</div>
+          <div class="cells">
+            <div class="cell svc"><div class="t">Trigger service</div><div class="d">Events · schedules · dedupe</div></div>
+            <div class="cell svc"><div class="t">Workflow engine</div><div class="d">Durable DAG / state machine</div></div>
+            <div class="cell svc"><div class="t">Agent runtime</div><div class="d">The LLM tool-use loop</div></div>
+            <div class="cell svc"><div class="t">Tool / connector</div><div class="d">Only side-effect boundary</div></div>
+            <div class="cell gate"><div class="t">Policy &amp; approval</div><div class="d">Gate on every action</div></div>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-label">State, trace, secrets, knowledge</div>
+          <div class="cells">
+            <div class="cell store"><div class="t">State store</div><div class="d">Postgres · RLS per tenant</div></div>
+            <div class="cell store"><div class="t">Event log</div><div class="d">Append-only · replayable</div></div>
+            <div class="cell store"><div class="t">Secrets vault</div><div class="d">Never in model context</div></div>
+            <div class="cell store"><div class="t">Knowledge / memory</div><div class="d">Vector + object store</div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <p class="note">Tools are the <b>only</b> way an agent touches an external system — one place to
+      enforce policy, audit, rate-limit, and redact secrets.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Lifecycle of a run</p>
+    <h2>Every execution is durable and traced</h2>
+    <p class="lede">A run survives process restarts and resumes from its last committed step. Because
+      state is durable and the log append-only, any run can be paused, resumed, replayed, or forked.</p>
+    <div class="scroll">
+      <div class="steps">
+        <div class="step"><div class="bar"></div><div class="num mono">1</div>
+          <div class="st">Trigger fires</div><div class="sd">Validate, dedupe, create Run (pending)</div></div>
+        <div class="step"><div class="bar"></div><div class="num mono">2</div>
+          <div class="st">Orchestrate</div><div class="sd">Load workflow, init run state</div></div>
+        <div class="step"><div class="bar"></div><div class="num mono">3</div>
+          <div class="st">Advance step</div><div class="sd">Agent · tool · branch · approval</div></div>
+        <div class="step"><div class="bar"></div><div class="num mono">4</div>
+          <div class="st">Append trace</div><div class="sd">Inputs, outputs, cost, decision</div></div>
+        <div class="step"><div class="bar"></div><div class="num mono">5</div>
+          <div class="st">Complete</div><div class="sd">Record outcome, fire feedback</div></div>
+        <div class="step"><div class="num mono">↺</div>
+          <div class="st">On failure</div><div class="sd">Retry · compensate · escalate</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Workflow node types</p>
+    <h2>Composition lives in the deterministic engine</h2>
+    <p class="lede">Multi-agent patterns — pipeline, router, planner/executor, reviewer — are built from
+      these nodes, so every hand-off is logged, retryable, and budget-bounded.</p>
+    <div class="legend">
+      <div class="node agent"><span class="tag mono">agent</span>
+        <div class="nd">Runs the LLM loop with a role, tool allow-list, and guardrails.</div></div>
+      <div class="node tool"><span class="tag mono">tool</span>
+        <div class="nd">One typed call to a connector; read-only or mutating.</div></div>
+      <div class="node branch"><span class="tag mono">branch</span>
+        <div class="nd">Evaluates a condition and chooses the next node.</div></div>
+      <div class="node approval"><span class="tag mono">approval</span>
+        <div class="nd">Pauses the run for a human decision, with timeout.</div></div>
+      <div class="node tool"><span class="tag mono">loop / wait</span>
+        <div class="nd">Iterate over items, or wait until a time or event.</div></div>
+      <div class="node tool"><span class="tag mono">sub_workflow</span>
+        <div class="nd">Invoke another workflow as a single step.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">The safety gate</p>
+    <h2>Every tool call is a policy decision</h2>
+    <p class="lede">Evaluated on tenant, agent, tool, arguments, cost, and data class. Default posture:
+      read-only is allowed, mutating actions are denied unless explicitly permitted or approved.</p>
+    <div class="decisions">
+      <div class="decision d-allow"><div class="dh mono">ALLOW</div>
+        <div class="dd">Action proceeds. Read-only tools take this path by default.</div></div>
+      <div class="decision d-approve"><div class="dh mono">REQUIRE_APPROVAL</div>
+        <div class="dd">Run pauses; a human approves with full context before the action runs.</div></div>
+      <div class="decision d-deny"><div class="dh mono">DENY</div>
+        <div class="dd">Action blocked and escalated. The system fails closed when in doubt.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Worked example · reference scaffold</p>
+    <h2>Invoice triage, as a real traced run</h2>
+    <p class="lede">The event log below is what the runnable scaffold actually emits. An $8,200 invoice
+      arrives by email; the agent extracts it and looks up the vendor (read-only, auto-allowed); the
+      accounting write exceeds $5,000, so it stops for finance approval before posting.</p>
+
+    <div class="trace">
+      <div class="trace-head">
+        <span>run <span class="mono">run_3</span> · workflow <span class="mono">invoice-triage</span></span>
+        <span class="ok">SUCCEEDED · $0.0162</span>
+      </div>
+
+      <div class="ev"><span class="id mono">#4</span><span class="ty">trigger_fired</span>
+        <span class="pl">email → <code>Globex Corp · INV-4471 · $8,200</code></span></div>
+      <div class="ev"><span class="id mono">#5</span><span class="ty">state_transition</span>
+        <span class="pl">entering step <code>extract</code> (agent)</span></div>
+      <div class="ev hl-agent"><span class="id mono">#6</span><span class="ty">agent_message</span>
+        <span class="pl">invoice_extractor → <code>tool_calls</code> <span class="cost">Δ $0.0162</span></span></div>
+      <div class="ev hl-ok"><span class="id mono">#7</span><span class="ty">policy_decision</span>
+        <span class="pl"><code>lookup_vendor</code> → allow · read-only tool</span></div>
+      <div class="ev"><span class="id mono">#8</span><span class="ty">tool_result</span>
+        <span class="pl">vendor <code>V-100</code> · known</span></div>
+      <div class="ev hl-agent"><span class="id mono">#9</span><span class="ty">agent_final</span>
+        <span class="pl">structured invoice extracted</span></div>
+      <div class="ev"><span class="id mono">#14</span><span class="ty">branch_taken</span>
+        <span class="pl">amount &gt; $5,000 → <code>post</code></span></div>
+      <div class="ev hl-gate"><span class="id mono">#17</span><span class="ty">policy_decision</span>
+        <span class="pl"><code>create_ap_entry</code> → require_approval · &gt; $5,000 needs finance</span></div>
+      <div class="ev hl-gate"><span class="id mono">#18</span><span class="ty">approval_requested</span>
+        <span class="pl">approvers <code>finance-team</code></span></div>
+      <div class="ev hl-gate"><span class="id mono">#19</span><span class="ty">approval_resolved</span>
+        <span class="pl">granted by <code>j.doe@finance</code></span></div>
+      <div class="ev hl-ok"><span class="id mono">#20</span><span class="ty">tool_result</span>
+        <span class="pl">AP entry <code>posted</code></span></div>
+      <div class="ev hl-ok"><span class="id mono">#21</span><span class="ty">run_succeeded</span>
+        <span class="pl">outcome recorded</span></div>
+
+      <div class="annot">The everyday path runs freely; <b>only the mutating, high-value action pauses
+        for a human</b> — the governed-automation model an enterprise needs, and every line here is an
+        immutable, replayable record.</div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Companion to the Bass design docs — architecture, agent design, security &amp; governance,
+      observability, deployment, and a phased roadmap. Diagrams reflect the runnable reference scaffold
+      in <span class="mono">/reference</span>.</p>
+  </footer>
+
+</div>
