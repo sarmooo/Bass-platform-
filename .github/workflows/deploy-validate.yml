@@ -23,7 +23,7 @@ jobs:
     name: Helm lint, template & schema-validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: azure/setup-helm@v4
         with:
           version: v3.16.2
@@ -62,7 +62,7 @@ jobs:
     name: Helm chart unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: azure/setup-helm@v4     # latest (Helm 4) — matches the current
                                       # helm-unittest plugin's platformHooks schema
       - name: Install helm-unittest plugin
@@ -74,7 +74,7 @@ jobs:
     name: Validate docker-compose
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: docker compose config (parse + interpolate)
         env:
           BASS_JWT_SECRET: ci-test

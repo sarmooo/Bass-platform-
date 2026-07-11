@@ -30,7 +30,7 @@ jobs:
       BASS_JWT_SECRET: e2e-secret
       COMPOSE: docker compose -f deploy/docker-compose.yml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Bring up the stack (Postgres + Redis + API, migrations first)
         run: $COMPOSE up -d --build
       - name: Wait for readiness (store reachable)
@@ -79,7 +79,7 @@ jobs:
     env:
       IMAGE: ghcr.io/sarmooo/bass
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - name: Build the image locally
         uses: docker/build-push-action@v6
