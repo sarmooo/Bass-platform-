@@ -89,7 +89,7 @@ class WorkflowEngine:
         step_id = run.cursor_step if run.cursor_step is not None else wf.start
 
         try:
-            step_id = self._drive(run, wf, budget, step_id)
+            self._drive(run, wf, budget, step_id)   # returns None at completion
         except _Paused:
             self.metrics.incr("runs.paused")
             return run                           # WAITING_APPROVAL already persisted
@@ -172,7 +172,7 @@ class WorkflowEngine:
     # -- node handlers ------------------------------------------------------
 
     def _run_agent(self, step: Step, run: Run) -> Optional[str]:
-        if step.agent not in self.agents:
+        if step.agent is None or step.agent not in self.agents:
             raise WorkflowError(f"unknown agent '{step.agent}'")
         agent = self.agents[step.agent]
         task = self._resolve(step.args, run) or {"email": run.trigger_event}
@@ -181,6 +181,7 @@ class WorkflowEngine:
         return step.next
 
     def _run_tool(self, step: Step, run: Run) -> Optional[str]:
+        assert step.tool is not None, "tool node requires a tool name"
         tool = self.tools.get(step.tool)
         args = self._resolve(step.args, run)
         key = f"{run.id}:{step.id}:{step.tool}"
@@ -288,7 +289,7 @@ class WorkflowEngine:
         self.emit(run, "compensation", {"for_step": step.id, "run_step": comp.id},
                   step_id=comp.id)
         try:
-            self._run_step(comp, run)
+            self._run_step(comp, run, wf)
         except Exception as exc:                 # compensation is best-effort
             self.emit(run, "compensation_failed", {"step": comp.id, "error": str(exc)},
                       step_id=comp.id)

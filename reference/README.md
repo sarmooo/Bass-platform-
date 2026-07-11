@@ -99,6 +99,16 @@ Same durable pipeline, but the extractor agent is driven by
 `providers.AnthropicModel` — real native tool use, structured JSON output, and
 per-model cost roll-up. Makes a real, billed API call.
 
+## Container & CI
+
+A root `Dockerfile` builds a slim, non-root image that serves the API
+(`uvicorn --factory bass.api:build_default_app`). CI (`.github/workflows/ci.yml`)
+runs three jobs on every push: **unit** (ruff + mypy + pytest with an 80% coverage
+gate + `pip-audit`), **integration-postgres** (the suite against a real
+PostgreSQL container), and **docker** (build the image, smoke-test that
+`/healthz` responds, then publish to GHCR). Dependabot keeps pip and Actions
+dependencies current.
+
 ## What still requires real infrastructure
 
 This is a faithful single-process implementation of the control loop. A full

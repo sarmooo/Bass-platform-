@@ -23,6 +23,7 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
         self._connectors: dict[str, Connector] = {}
+        self._accounting: Any = None            # example wiring, set by default_registry
 
     def register_connector(self, connector: Connector) -> None:
         self._connectors[connector.name] = connector
@@ -60,13 +61,13 @@ class _AccountingSystem:
 
     def lookup_vendor(self, args: dict) -> Any:
         vendor = args.get("vendor")
-        rec = _KNOWN_VENDORS.get(vendor)
+        rec = _KNOWN_VENDORS.get(vendor) if isinstance(vendor, str) else None
         return {"vendor": vendor, "id": (rec or {}).get("id"), "known": rec is not None}
 
     def create_ap_entry(self, args: dict) -> Any:
         # The connector honors the idempotency key: a duplicate call returns the
         # original entry instead of creating a second one.
-        key = args.get("_idempotency_key") or args.get("invoice_number")
+        key = args.get("_idempotency_key") or args.get("invoice_number") or ""
         with self._lock:
             if key in self._entries:
                 return self._entries[key]

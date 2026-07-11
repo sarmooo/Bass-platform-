@@ -37,3 +37,15 @@ select = ["E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["bass"]
+# Exercised only in the integration/live paths, not the unit job:
+omit = ["bass/providers.py", "bass/store_postgres.py", "bass/example_run_live.py"]
+
+[tool.coverage.report]
+show_missing = true
