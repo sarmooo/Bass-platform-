@@ -23,6 +23,10 @@ class BudgetExceeded(BassError):
     """A run exceeded its cost or step budget."""
 
 
+class RateLimited(BassError):
+    """A tenant exceeded its request rate limit."""
+
+
 class ApprovalRequired(BassError):
     """A run is paused awaiting a human decision (not a failure)."""
 

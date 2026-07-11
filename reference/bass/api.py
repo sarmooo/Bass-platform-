@@ -7,8 +7,12 @@ gate mutating endpoints. Approvals are asynchronous — firing a run that needs
 approval returns it in `waiting_approval`, and the approval endpoint resolves it
 and resumes the run.
 
-Requires the `[api]` extra (fastapi, uvicorn, pyjwt, httpx). The core package
-does not import this module, so installing the API stack is optional.
+Every request is also subject to a per-tenant rate limit (`ratelimit.py`);
+exceeding it returns HTTP 429 before any work is scheduled.
+
+Requires the `[api]` extra (fastapi, uvicorn, httpx). Auth (`auth.py`) is
+stdlib-only, with no crypto dependency. The core package does not import this
+module, so installing the API stack is optional.
 """
 
 from __future__ import annotations
@@ -18,11 +22,12 @@ from typing import Any, Optional
 
 from .agent import AgentRuntime
 from .auth import AuthError, Principal, decode_token
-from .errors import BassError, TenantIsolationError
+from .errors import BassError, RateLimited, TenantIsolationError
 from .models import Agent, Run, Workflow
 from .observability import Metrics
 from .orchestrator import derive_idempotency_key
 from .policy import PolicyEngine
+from .ratelimit import InMemoryRateLimiter, RateLimiter
 from .store import Store
 from .tools import MockModel, ToolRegistry
 from .workflow import WorkflowEngine
@@ -33,7 +38,7 @@ class ApiService:
 
     def __init__(self, store: Store, agents: dict[str, Agent], tools: ToolRegistry,
                  policy: PolicyEngine, jwt_secret: str, model: Any = None,
-                 metrics: Metrics | None = None):
+                 metrics: Metrics | None = None, rate_limiter: RateLimiter | None = None):
         self.store = store
         self.agents = agents
         self.tools = tools
@@ -41,6 +46,9 @@ class ApiService:
         self.jwt_secret = jwt_secret
         self.model = model or MockModel()
         self.metrics = metrics or Metrics()
+        # Per-tenant request rate limit. In-memory default is process-local (fine
+        # for a single instance); swap RedisRateLimiter for a shared window.
+        self.rate_limiter: RateLimiter = rate_limiter or InMemoryRateLimiter(limit=1000)
         self.workflows_by_id: dict[str, Workflow] = {}
         self.workflows_by_name: dict[str, Workflow] = {}
 
@@ -69,6 +77,8 @@ class ApiService:
         wf = self.workflows_by_name.get(wf_name)
         if wf is None:
             raise KeyError(wf_name)
+        if not self.rate_limiter.allow(tenant_id):
+            raise RateLimited(tenant_id)
         self.store.ensure_tenant(tenant_id, tenant_id, {})
         run = Run(tenant_id=tenant_id, workflow_id=wf.id, workflow_version=wf.version,
                   trigger_event=trigger, idempotency_key=derive_idempotency_key(trigger),
@@ -164,6 +174,8 @@ def create_app(service: ApiService):
             run = service.fire(p.tenant_id, name, body.get("trigger", {}))
         except KeyError:
             raise HTTPException(status_code=404, detail="unknown workflow")
+        except RateLimited:
+            raise HTTPException(status_code=429, detail="rate limit exceeded")
         return _run_view(run)
 
     @app.get("/v1/runs")

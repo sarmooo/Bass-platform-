@@ -55,6 +55,11 @@ deployment swaps the implementation without touching the engine:
   event/manual/schedule trigger model. Tested in `tests/test_schedule.py`.
 - **Temporal durable execution** (`temporal_adapter.py`) — a run driven by a real
   Temporal workflow; verified against Temporal's test server in CI.
+- **Per-tenant rate limiting** (`ratelimit.py`) — a fixed-window limiter guards
+  every fire; over-limit returns HTTP 429. Process-local `InMemoryRateLimiter` by
+  default, `RedisRateLimiter` (INCR + EXPIRE) for a window shared across instances,
+  behind one `RateLimiter` interface. Both are tested — the Redis path against a
+  real Redis service container in CI (`tests/test_ratelimit.py`).
 
 ## Run the offline example
 
@@ -124,11 +129,12 @@ per-model cost roll-up. Makes a real, billed API call.
 
 A root `Dockerfile` builds a slim, non-root image that serves the API
 (`uvicorn --factory bass.api:build_default_app`). CI (`.github/workflows/ci.yml`)
-runs three jobs on every push: **unit** (ruff + mypy + pytest with an 80% coverage
-gate + `pip-audit`), **integration-postgres** (the suite against a real
-PostgreSQL container), and **docker** (build the image, smoke-test that
-`/healthz` responds, then publish to GHCR). Dependabot keeps pip and Actions
-dependencies current.
+runs four jobs on every push: **unit** (ruff + mypy + pytest with an 80% coverage
+gate + `pip-audit`), **integration** (the suite against a real PostgreSQL
+container plus a real Redis container for the distributed rate limiter),
+**temporal** (a run driven by Temporal's test server), and **docker** (build the
+image, smoke-test that `/healthz` responds, then publish to GHCR). Dependabot
+keeps pip and Actions dependencies current.
 
 ## What still requires real infrastructure
 

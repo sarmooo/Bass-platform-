@@ -57,18 +57,28 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       BASS_TEST_DB_URL: postgresql://bass:bass@localhost:5432/bass
+      BASS_TEST_REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install (PostgreSQL driver + API)
+      - name: Install (PostgreSQL driver + API + Redis)
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,postgres,api]"
-      - name: Test (pytest, PostgreSQL store)
+          pip install -e ".[dev,postgres,api,redis]"
+      - name: Test (pytest, PostgreSQL store + Redis rate limiter)
         run: pytest -q
 
   temporal:
