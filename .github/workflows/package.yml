@@ -1,0 +1,71 @@
+name: Package
+
+# Build the Python distribution, validate it, produce a source SBOM, and (only on
+# a published Release) publish to TestPyPI via OIDC trusted publishing. The build
+# + check + SBOM run on every change so a packaging break is caught early; the
+# publish step needs a TestPyPI trusted-publisher config and a `testpypi`
+# environment, so it's inert until those exist.
+
+on:
+  push:
+    paths:
+      - "reference/**"
+      - ".github/workflows/package.yml"
+  pull_request:
+    paths:
+      - "reference/**"
+      - ".github/workflows/package.yml"
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, check & SBOM
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build sdist + wheel and validate metadata
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: reference/dist/*
+      - name: Source SBOM (CycloneDX)
+        run: |
+          pip install -e ".[api,postgres,otel]"
+          pip install cyclonedx-bom
+          cyclonedx-py environment -o sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-sbom
+          path: reference/sbom.cdx.json
+          if-no-files-found: warn
+
+  publish-testpypi:
+    name: Publish to TestPyPI (on release)
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment: testpypi          # configure with a TestPyPI trusted publisher
+    permissions:
+      id-token: write              # OIDC trusted publishing — no API token needed
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
