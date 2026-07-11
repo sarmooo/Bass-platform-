@@ -61,6 +61,18 @@ class ApiTests(unittest.TestCase):
     def test_healthz(self):
         self.assertEqual(self.client.get("/healthz").json(), {"status": "ok"})
 
+    def test_readyz(self):
+        r = self.client.get("/readyz")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "ready")
+
+    def test_metrics_requires_auth_and_reports(self):
+        self.assertEqual(self.client.get("/metrics").status_code, 401)
+        self._fire()                                    # generate some activity
+        snap = self.client.get("/metrics", headers=_auth(_token())).json()
+        self.assertIn("counters", snap)
+        self.assertTrue(snap["counters"])               # non-empty after a run
+
     def test_missing_token_is_401(self):
         r = self.client.post("/v1/workflows/invoice-triage/runs", json={"trigger": {}})
         self.assertEqual(r.status_code, 401)

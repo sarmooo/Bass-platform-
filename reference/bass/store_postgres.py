@@ -83,6 +83,14 @@ class PostgresStore:
     def close(self) -> None:
         self._conn.close()
 
+    def ping(self) -> bool:
+        try:
+            with self._lock:
+                self._conn.execute("SELECT 1").fetchone()
+            return True
+        except Exception:
+            return False
+
     def apply_row_level_security(self) -> None:
         """Enable DB-enforced tenant isolation (defense in depth over the app
         checks). After this, the app must connect as a **non-superuser role

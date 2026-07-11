@@ -89,6 +89,7 @@ class Store(Protocol):
                         step_id: str) -> Optional[tuple[str, str]]: ...
     def cancel_run(self, tenant_id: str, run_id: str) -> bool: ...
     def purge_event_payloads(self, tenant_id: str, before_ts: float) -> int: ...
+    def ping(self) -> bool: ...
 
 
 class SQLiteStore:
@@ -105,6 +106,15 @@ class SQLiteStore:
 
     def close(self) -> None:
         self._conn.close()
+
+    def ping(self) -> bool:
+        """Readiness check: is the datastore reachable?"""
+        try:
+            with self._lock:
+                self._conn.execute("SELECT 1").fetchone()
+            return True
+        except Exception:
+            return False
 
     # -- tenants -----------------------------------------------------------
 

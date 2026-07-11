@@ -139,7 +139,17 @@ def create_app(service: ApiService):
 
     @app.get("/healthz")
     def health() -> dict:
-        return {"status": "ok"}
+        return {"status": "ok"}                    # liveness — process is up
+
+    @app.get("/readyz")
+    def ready() -> dict:
+        if not service.store.ping():               # readiness — datastore reachable
+            raise HTTPException(status_code=503, detail="store unavailable")
+        return {"status": "ready"}
+
+    @app.get("/metrics")
+    def metrics(p: Principal = Depends(require())) -> dict:
+        return service.metrics.snapshot()
 
     @app.post("/v1/workflows/{name}/runs")
     def fire(name: str, body: dict,
