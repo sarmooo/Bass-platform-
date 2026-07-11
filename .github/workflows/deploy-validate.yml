@@ -58,6 +58,19 @@ jobs:
           kubeconform -strict -summary -ignore-missing-schemas /tmp/rendered-default.yaml
           kubeconform -strict -summary -ignore-missing-schemas /tmp/rendered-full.yaml
 
+  helm-unittest:
+    name: Helm chart unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+      - name: Run chart unit tests
+        run: helm unittest deploy/helm/bass
+
   compose:
     name: Validate docker-compose
     runs-on: ubuntu-latest

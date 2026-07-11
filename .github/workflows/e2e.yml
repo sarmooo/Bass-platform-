@@ -70,6 +70,12 @@ jobs:
   kind:
     name: Helm deploy to kind (migrate hook + rollback drill)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # "" uses kind-action's default (known-good) image; the pinned entries
+        # prove the chart deploys across supported Kubernetes minor versions.
+        node_image: ["", "kindest/node:v1.31.0", "kindest/node:v1.29.0"]
     env:
       IMAGE: ghcr.io/sarmooo/bass
     steps:
@@ -85,6 +91,7 @@ jobs:
         uses: helm/kind-action@v1
         with:
           cluster_name: bass
+          node_image: ${{ matrix.node_image }}
       - name: Load the image into kind
         run: kind load docker-image ${IMAGE}:e2e --name bass
       - uses: azure/setup-helm@v4

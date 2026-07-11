@@ -1,0 +1,35 @@
+name: Terraform
+
+# Validates the IaC deploy module (deploy/terraform). `validate` gates; `fmt` is
+# advisory. A real `plan`/`apply` needs cluster credentials, so it's not run here.
+
+on:
+  push:
+    paths:
+      - "deploy/terraform/**"
+      - ".github/workflows/terraform.yml"
+  pull_request:
+    paths:
+      - "deploy/terraform/**"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: terraform validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Format check (advisory)
+        continue-on-error: true
+        run: terraform fmt -check -recursive
+      - name: Init (no backend, install providers)
+        run: terraform init -backend=false
+      - name: Validate
+        run: terraform validate

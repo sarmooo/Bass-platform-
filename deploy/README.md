@@ -10,7 +10,8 @@ ephemeral `kind` cluster (migration hook → readiness → upgrade/rollback dril
 | Artifact | What it is |
 |----------|-----------|
 | [`docker-compose.yml`](docker-compose.yml) | Single-host stack: Postgres + Redis + API, migrations applied first. |
-| [`helm/bass`](helm/bass) | Kubernetes chart: Deployment (non-root, read-only rootfs), Service, optional Ingress + HPA, and a **pre-upgrade migration Job**. |
+| [`helm/bass`](helm/bass) | Kubernetes chart: Deployment (non-root, read-only rootfs), Service, optional Ingress + HPA, and a **pre-upgrade migration Job**. Has a `values.schema.json` and `helm unittest` tests. |
+| [`terraform`](terraform) | IaC deploy of the chart via the `helm`/`kubernetes` providers; `terraform validate` runs in CI. |
 
 The operational procedures — deploy, migrate, roll back, scale, incident
 response, backup/restore — are in the [operations runbook](../docs/10-operations.md).
