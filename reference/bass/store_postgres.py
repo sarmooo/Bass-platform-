@@ -138,6 +138,19 @@ class PostgresStore:
             row = self._conn.execute("SELECT * FROM runs WHERE id=%s", (run_id,)).fetchone()
         return self._row_to_run(row, tenant_id) if row else None
 
+    def list_runs(self, tenant_id: str, limit: int = 50,
+                  status: Optional[str] = None) -> list[Run]:
+        q = "SELECT * FROM runs WHERE tenant_id=%s"
+        params: list = [tenant_id]
+        if status:
+            q += " AND status=%s"
+            params.append(status)
+        q += " ORDER BY started_at DESC LIMIT %s"
+        params.append(limit)
+        with self._lock:
+            rows = self._conn.execute(q, params).fetchall()
+        return [self._row_to_run(r, tenant_id) for r in rows]
+
     def _load_by_key(self, tenant_id: str, key: str) -> Optional[Run]:
         with self._lock:
             row = self._conn.execute(

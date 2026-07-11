@@ -76,6 +76,8 @@ class Store(Protocol):
     def ensure_tenant(self, tenant_id: str, name: str, settings: dict) -> None: ...
     def create_or_get_run(self, run: Run) -> tuple[Run, bool]: ...
     def load_run(self, tenant_id: str, run_id: str) -> Optional[Run]: ...
+    def list_runs(self, tenant_id: str, limit: int = 50,
+                  status: Optional[str] = None) -> list[Run]: ...
     def checkpoint(self, run: Run, events: list[Event]) -> None: ...
     def list_events(self, tenant_id: str, run_id: str) -> list[Event]: ...
     def get_effect(self, tenant_id: str, key: str) -> Optional[Any]: ...
@@ -157,6 +159,19 @@ class SQLiteStore:
             row = self._conn.execute(
                 "SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
         return self._row_to_run(row, tenant_id) if row else None
+
+    def list_runs(self, tenant_id: str, limit: int = 50,
+                  status: Optional[str] = None) -> list[Run]:
+        q = "SELECT * FROM runs WHERE tenant_id=?"
+        params: list = [tenant_id]
+        if status:
+            q += " AND status=?"
+            params.append(status)
+        q += " ORDER BY started_at DESC LIMIT ?"
+        params.append(limit)
+        with self._lock:
+            rows = self._conn.execute(q, params).fetchall()
+        return [self._row_to_run(r, tenant_id) for r in rows]
 
     def _load_run_by_key(self, tenant_id: str, key: str) -> Optional[Run]:
         with self._lock:

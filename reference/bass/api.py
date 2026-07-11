@@ -160,6 +160,13 @@ def create_app(service: ApiService):
             raise HTTPException(status_code=404, detail="unknown workflow")
         return _run_view(run)
 
+    @app.get("/v1/runs")
+    def list_runs(status: str = "", limit: int = 50,
+                  p: Principal = Depends(require())) -> dict:
+        runs = service.store.list_runs(p.tenant_id, limit=min(max(limit, 1), 200),
+                                       status=status or None)
+        return {"runs": [_run_view(r) for r in runs]}
+
     @app.get("/v1/runs/{run_id}")
     def get_run(run_id: str, p: Principal = Depends(require())) -> dict:
         try:

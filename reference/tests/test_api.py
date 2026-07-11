@@ -114,6 +114,17 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(r.json()["status"], "failed")
         self.assertEqual(self.acct.count(), 0)
 
+    def test_list_runs(self):
+        for i in range(3):
+            self.client.post("/v1/workflows/invoice-triage/runs",
+                             json={"trigger": {**self.trigger, "message_id": f"<m{i}>"}},
+                             headers=_auth(_token()))
+        listed = self.client.get("/v1/runs", headers=_auth(_token())).json()
+        self.assertGreaterEqual(len(listed["runs"]), 3)
+        waiting = self.client.get("/v1/runs?status=waiting_approval",
+                                  headers=_auth(_token())).json()
+        self.assertTrue(all(r["status"] == "waiting_approval" for r in waiting["runs"]))
+
     def test_cancel_waiting_run(self):
         run_id = self._fire().json()["run_id"]        # pauses at approval
         r = self.client.post(f"/v1/runs/{run_id}/cancel", headers=_auth(_token()))
