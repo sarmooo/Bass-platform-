@@ -63,9 +63,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-        with:
-          version: v3.16.2
+      - uses: azure/setup-helm@v4     # latest helm — the current helm-unittest plugin
+                                      # needs a plugin.yaml schema (platformHooks) newer than 3.16
       - name: Install helm-unittest plugin
         run: helm plugin install https://github.com/helm-unittest/helm-unittest
       - name: Run chart unit tests
