@@ -88,6 +88,7 @@ class Store(Protocol):
     def latest_approval(self, tenant_id: str, run_id: str,
                         step_id: str) -> Optional[tuple[str, str]]: ...
     def cancel_run(self, tenant_id: str, run_id: str) -> bool: ...
+    def purge_event_payloads(self, tenant_id: str, before_ts: float) -> int: ...
 
 
 class SQLiteStore:
@@ -261,6 +262,16 @@ class SQLiteStore:
                 "UPDATE approvals SET status=?, decided_by=?, note=?, decided_at=? WHERE id=?",
                 (status, decided_by, note, time.time(), approval_id),
             )
+
+    def purge_event_payloads(self, tenant_id: str, before_ts: float) -> int:
+        """Retention: empty event payloads older than `before_ts`, keeping the
+        event rows, types, and cost so audit and billing summaries survive.
+        Returns the number of payloads purged."""
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "UPDATE events SET payload_json='{}' WHERE tenant_id=? AND created_at < ? "
+                "AND payload_json != '{}'", (tenant_id, before_ts))
+            return cur.rowcount
 
     def latest_approval(self, tenant_id: str, run_id: str,
                         step_id: str) -> Optional[tuple[str, str]]:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from bass.connectors import CircuitBreaker, Connector, ReliabilityConfig, Transi
 from bass.errors import (BudgetExceeded, CircuitOpen, ConnectorError, PolicyDenied,
                          TenantIsolationError)
 from bass.example_run import build_agents, build_workflow, demo_approver
-from bass.models import Agent, PolicyEffect, Run, RunStatus, Tool, Workflow
+from bass.models import Agent, Event, PolicyEffect, Run, RunStatus, Tool, Workflow
 from bass.policy import Policy, PolicyEngine, default_policies
 from bass.redaction import REDACTED, redact
 from bass.store import SQLiteStore, open_store
@@ -154,6 +155,17 @@ class StoreTests(unittest.TestCase):
         # cross-tenant cancel is refused
         with self.assertRaises(TenantIsolationError):
             self.store.cancel_run("tenant_b", r.id)
+
+    def test_purge_event_payloads_keeps_cost_and_rows(self):
+        r, _ = self.store.create_or_get_run(_run_seed(self.wf, "tenant_a", "purge"))
+        self.store.checkpoint(r, [Event(run_id=r.id, tenant_id="tenant_a",
+                                        type="tool_result",
+                                        payload={"secret_data": "x"}, cost_usd=0.01)])
+        purged = self.store.purge_event_payloads("tenant_a", time.time() + 1)
+        self.assertGreaterEqual(purged, 1)
+        events = self.store.list_events("tenant_a", r.id)
+        self.assertTrue(all(e.payload == {} for e in events))     # payloads emptied
+        self.assertTrue(any(e.cost_usd == 0.01 for e in events))  # cost retained
 
 
 class ConnectorTests(unittest.TestCase):

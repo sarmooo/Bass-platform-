@@ -239,6 +239,13 @@ class PostgresStore:
                 ("approved" if approved else "rejected", decided_by, note, time.time(),
                  approval_id))
 
+    def purge_event_payloads(self, tenant_id: str, before_ts: float) -> int:
+        with self._lock, self._conn.transaction():
+            cur = self._conn.execute(
+                "UPDATE events SET payload_json='{}' WHERE tenant_id=%s AND created_at < %s "
+                "AND payload_json <> '{}'", (tenant_id, before_ts))
+            return cur.rowcount
+
     def latest_approval(self, tenant_id: str, run_id: str,
                         step_id: str) -> Optional[tuple[str, str]]:
         with self._lock:
