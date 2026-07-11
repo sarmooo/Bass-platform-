@@ -69,6 +69,23 @@ export BASS_TEST_DB_URL=postgresql://user:pass@localhost:5432/bass
 pip install -e ".[dev,postgres]" && pytest -q
 ```
 
+## Run the HTTP API
+
+```bash
+cd reference
+pip install -e ".[api]"
+export BASS_JWT_SECRET=dev-secret BASS_DB_PATH=bass.db
+uvicorn --factory bass.api:build_default_app
+```
+
+A FastAPI service over the engine: `POST /v1/workflows/{name}/runs` (fire),
+`GET /v1/runs/{id}` and `/trace`, and `POST /v1/runs/{id}/approvals/{approval_id}`
+(resolve). Every request runs under a bearer-JWT `Principal`; the `tenant_id`
+scopes all data access and RBAC roles gate mutating endpoints. Approvals are
+**asynchronous** — firing the $8,200 invoice returns `waiting_approval`, and the
+approval endpoint resolves it and resumes the run. Covered by `tests/test_api.py`
+(auth, RBAC, the async approval round-trip, and tenant isolation).
+
 ## Run the live example (real Claude call)
 
 ```bash

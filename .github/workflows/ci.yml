@@ -24,10 +24,10 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,api]"
       - name: Lint (ruff)
         run: ruff check bass tests
-      - name: Test (pytest, SQLite store)
+      - name: Test (pytest, SQLite store + HTTP API)
         run: pytest -q
 
   integration-postgres:
@@ -58,9 +58,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install (with PostgreSQL driver)
+      - name: Install (with PostgreSQL driver + API)
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,postgres]"
+          pip install -e ".[dev,postgres,api]"
       - name: Test (pytest, PostgreSQL store)
         run: pytest -q

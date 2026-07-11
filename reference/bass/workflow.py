@@ -36,8 +36,19 @@ from .tools import ToolRegistry
 
 log = get_logger("engine")
 
-# approval_fn(run, step, tool, args) -> bool ; the reference resolves synchronously.
+# approval_fn(run, step, tool, args) -> bool. Optional: if provided, approvals
+# resolve synchronously (used by the CLI examples and tests). If None, approvals
+# are asynchronous — the run pauses (WAITING_APPROVAL) and an external caller
+# resolves the approval, then resumes the run. That async path is what the HTTP
+# API uses (bass/api.py).
 ApprovalFn = Callable[[Run, Step, str, dict], bool]
+
+
+class _Paused(Exception):
+    """Internal signal: the run paused awaiting an external approval decision."""
+
+    def __init__(self, approval_id: str):
+        self.approval_id = approval_id
 
 
 class WorkflowEngine:
@@ -49,7 +60,7 @@ class WorkflowEngine:
         self.tools = tools
         self.policy = policy
         self.runtime = runtime
-        self.approval_fn = approval_fn or (lambda *a, **k: False)
+        self.approval_fn = approval_fn          # None => asynchronous approvals
         self.metrics = metrics or Metrics()
         self._buffer: list[Event] = []           # events for the current step
 
@@ -77,6 +88,17 @@ class WorkflowEngine:
         run.status = RunStatus.RUNNING
         step_id = run.cursor_step if run.cursor_step is not None else wf.start
 
+        try:
+            step_id = self._drive(run, wf, budget, step_id)
+        except _Paused:
+            self.metrics.incr("runs.paused")
+            return run                           # WAITING_APPROVAL already persisted
+
+        self.metrics.incr("runs.succeeded")
+        return run
+
+    def _drive(self, run: Run, wf: Workflow, budget: Budget,
+               step_id: Optional[str]) -> Optional[str]:
         while step_id is not None:
             if step_id not in wf.steps:
                 raise WorkflowError(f"unknown step '{step_id}'")
@@ -118,8 +140,7 @@ class WorkflowEngine:
             self._checkpoint(run)               # durable barrier between steps
             step_id = next_id
 
-        self.metrics.incr("runs.succeeded")
-        return run
+        return step_id
 
     def _run_step_with_retry(self, step: Step, run: Run, wf: Workflow) -> Optional[str]:
         last: Exception | None = None
@@ -187,8 +208,8 @@ class WorkflowEngine:
             raise PolicyDenied(f"{step.tool}: {decision.reason}")
 
         if decision.effect == PolicyEffect.REQUIRE_APPROVAL:
-            if not self._request_approval(step, run, decision.approvers, tool_name=step.tool,
-                                          args=args):
+            if not self._await_approval(step, run, decision.approvers, tool_name=step.tool,
+                                        args=args):
                 raise PolicyDenied(f"{step.tool}: approval not granted")
 
         if tool.side_effect:
@@ -211,26 +232,52 @@ class WorkflowEngine:
         return step.next
 
     def _run_approval(self, step: Step, run: Run) -> Optional[str]:
-        if not self._request_approval(step, run, step.approvers):
+        if not self._await_approval(step, run, step.approvers):
             raise PolicyDenied(f"approval step '{step.id}' rejected")
         return step.next
 
-    # -- helpers ------------------------------------------------------------
+    # -- approvals (synchronous or asynchronous) ---------------------------
 
-    def _request_approval(self, step: Step, run: Run, approvers: list[str],
-                          tool_name: str = "", args: dict | None = None) -> bool:
-        approval_id = self.store.create_approval(run.tenant_id, run.id, step.id, approvers)
-        run.status = RunStatus.WAITING_APPROVAL
-        self.emit(run, "approval_requested",
-                  {"approval_id": approval_id, "approvers": approvers,
-                   "tool": tool_name, "amount": (args or {}).get("amount")}, step_id=step.id)
-        granted = self.approval_fn(run, step, tool_name, args or {})
-        self.store.resolve_approval(run.tenant_id, approval_id, granted,
-                                    decided_by="approval_fn")
+    def _await_approval(self, step: Step, run: Run, approvers: list[str],
+                        tool_name: str = "", args: dict | None = None) -> bool:
+        """Return True to proceed, False if rejected. Raises `_Paused` when the
+        decision is asynchronous and not yet made."""
+        if self.approval_fn is not None:
+            # Synchronous: resolve inline (CLI examples, tests).
+            approval_id = self.store.create_approval(run.tenant_id, run.id, step.id, approvers)
+            run.status = RunStatus.WAITING_APPROVAL
+            self.emit(run, "approval_requested",
+                      {"approval_id": approval_id, "approvers": approvers,
+                       "tool": tool_name, "amount": (args or {}).get("amount")},
+                      step_id=step.id)
+            granted = self.approval_fn(run, step, tool_name, args or {})
+            self.store.resolve_approval(run.tenant_id, approval_id, granted,
+                                        decided_by="approval_fn")
+            self.emit(run, "approval_resolved",
+                      {"approval_id": approval_id, "granted": granted}, step_id=step.id)
+            run.status = RunStatus.RUNNING
+            return granted
+
+        # Asynchronous: an external caller (the HTTP API) resolves the approval.
+        existing = self.store.latest_approval(run.tenant_id, run.id, step.id)
+        if existing is None:
+            approval_id = self.store.create_approval(run.tenant_id, run.id, step.id, approvers)
+            run.status = RunStatus.WAITING_APPROVAL
+            self.emit(run, "approval_requested",
+                      {"approval_id": approval_id, "approvers": approvers,
+                       "tool": tool_name, "amount": (args or {}).get("amount")},
+                      step_id=step.id)
+            self._checkpoint(run)                # persist the paused state + request
+            raise _Paused(approval_id)
+        approval_id, status = existing
+        if status == "pending":
+            run.status = RunStatus.WAITING_APPROVAL
+            self._checkpoint(run)
+            raise _Paused(approval_id)
         self.emit(run, "approval_resolved",
-                  {"approval_id": approval_id, "granted": granted}, step_id=step.id)
-        run.status = RunStatus.RUNNING
-        return granted
+                  {"approval_id": approval_id, "granted": status == "approved"},
+                  step_id=step.id)
+        return status == "approved"
 
     def _compensate(self, step: Step, run: Run, wf: Workflow) -> None:
         if not step.compensate_with:

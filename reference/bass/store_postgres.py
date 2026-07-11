@@ -188,6 +188,15 @@ class PostgresStore:
                 ("approved" if approved else "rejected", decided_by, note, time.time(),
                  approval_id))
 
+    def latest_approval(self, tenant_id: str, run_id: str,
+                        step_id: str) -> Optional[tuple[str, str]]:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id, status FROM approvals WHERE run_id=%s AND tenant_id=%s "
+                "AND step_id=%s ORDER BY requested_at DESC LIMIT 1",
+                (run_id, tenant_id, step_id)).fetchone()
+        return (row["id"], row["status"]) if row else None
+
     # -- helpers -----------------------------------------------------------
 
     def _assert_owns(self, tenant_id: str, run_id: str) -> None:

@@ -85,6 +85,8 @@ class Store(Protocol):
                         approvers: list[str]) -> str: ...
     def resolve_approval(self, tenant_id: str, approval_id: str, approved: bool,
                          decided_by: str, note: str = "") -> None: ...
+    def latest_approval(self, tenant_id: str, run_id: str,
+                        step_id: str) -> Optional[tuple[str, str]]: ...
 
 
 class SQLiteStore:
@@ -235,6 +237,15 @@ class SQLiteStore:
                 "UPDATE approvals SET status=?, decided_by=?, note=?, decided_at=? WHERE id=?",
                 (status, decided_by, note, time.time(), approval_id),
             )
+
+    def latest_approval(self, tenant_id: str, run_id: str,
+                        step_id: str) -> Optional[tuple[str, str]]:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id, status FROM approvals WHERE run_id=? AND tenant_id=? AND step_id=? "
+                "ORDER BY requested_at DESC, rowid DESC LIMIT 1",
+                (run_id, tenant_id, step_id)).fetchone()
+        return (row["id"], row["status"]) if row else None
 
     # -- helpers -----------------------------------------------------------
 
