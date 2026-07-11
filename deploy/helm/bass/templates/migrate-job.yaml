@@ -32,4 +32,10 @@ spec:
             {{- include "bass.env" . | nindent 12 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 {{- end }}

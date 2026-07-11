@@ -128,5 +128,9 @@ jobs:
         if: failure()
         run: |
           kubectl get pods,jobs,svc -o wide || true
+          kubectl describe job bass-migrate || true
+          kubectl logs job/bass-migrate --all-containers=true --tail=200 || true
           kubectl describe pods -l app.kubernetes.io/name=bass || true
-          kubectl logs -l app.kubernetes.io/name=bass --tail=100 || true
+          kubectl logs -l app.kubernetes.io/name=bass --tail=200 --all-containers=true || true
+          echo "=== recent events ==="
+          kubectl get events --sort-by=.lastTimestamp | tail -50 || true
