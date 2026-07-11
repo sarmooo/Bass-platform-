@@ -1,0 +1,48 @@
+name: Docs site
+
+# Builds the static documentation site from docs/ and publishes it to GitHub
+# Pages. The build always runs (so a docs break is caught); the deploy step is
+# inert until Pages is enabled for the repo (Settings → Pages → Source: GitHub
+# Actions), so it never reds CI before then.
+
+on:
+  push:
+    branches: ["main", "claude/ai-automation-system-design-sya5ug"]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install markdown
+      - run: python docs/build_site.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_site
+
+  deploy:
+    name: Deploy to Pages (needs Pages enabled)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deploy
+        continue-on-error: true      # inert until Pages source is set to GitHub Actions
+        uses: actions/deploy-pages@v4

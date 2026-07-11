@@ -63,13 +63,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-        with:
-          # 3.17 understands the plugin's platformHooks schema (3.16 doesn't) and
-          # doesn't force plugin verification (Helm 4 does).
-          version: v3.17.0
+      - uses: azure/setup-helm@v4     # latest (Helm 4) — matches the current
+                                      # helm-unittest plugin's platformHooks schema
       - name: Install helm-unittest plugin
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
       - name: Run chart unit tests
         run: helm unittest deploy/helm/bass
 

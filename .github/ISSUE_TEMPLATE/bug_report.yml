@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a defect in Bass
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report. Please do not include secrets or PII in logs.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and its impact.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps, config, or a failing test.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: e.g. v0.1.0 or a commit SHA
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - engine (durability/idempotency)
+        - policy / governance
+        - store (SQLite/Postgres)
+        - API / auth
+        - connectors
+        - deployment (Helm/compose/migrations)
+        - other

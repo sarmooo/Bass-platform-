@@ -1,0 +1,25 @@
+name: Release Drafter
+
+# Maintains a draft GitHub Release, updating it from merged PR titles so cutting a
+# release is a one-click publish. Runs only on the default branch; harmless
+# (drafts aren't public) and inert on feature branches.
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  update_release_draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # create/update the draft release
+      pull-requests: read
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

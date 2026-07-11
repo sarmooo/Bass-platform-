@@ -12,3 +12,4 @@ venv/
 .pytest_cache/
 build/
 dist/
+docs/_site/
