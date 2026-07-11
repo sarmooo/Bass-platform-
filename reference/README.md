@@ -12,6 +12,7 @@ deployment swaps the implementation without touching the engine:
 |---------|-----------|-------------------|-----------------|
 | State + event log | `store.Store` | `SQLiteStore` (WAL, ACID) | `PostgresStore` (implemented; CI-verified) |
 | Model | `respond()` | `tools.MockModel` | `providers.AnthropicModel` (Claude) |
+| Execution driver | `engine.resume` | in-process | `temporal_adapter` (Temporal workflow) |
 | Secrets | `secrets.SecretsProvider` | `EnvSecrets` | Vault / cloud KMS |
 | Connector | `connectors.Connector` | in-process example | Gmail, Salesforce, HTTP, DB |
 | Metrics | `observability.Metrics` | in-process counters | OpenTelemetry |

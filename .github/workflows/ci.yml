@@ -71,6 +71,26 @@ jobs:
       - name: Test (pytest, PostgreSQL store)
         run: pytest -q
 
+  temporal:
+    name: Temporal durable execution
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    env:
+      BASS_TEST_TEMPORAL: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (Temporal)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,temporal]"
+      - name: Test (a Bass run driven by a Temporal workflow)
+        run: pytest -q tests/test_temporal.py
+
   docker:
     name: Build, smoke-test & publish image
     runs-on: ubuntu-latest
