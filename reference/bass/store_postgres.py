@@ -85,8 +85,9 @@ class PostgresStore:
 
     def apply_row_level_security(self) -> None:
         """Enable DB-enforced tenant isolation (defense in depth over the app
-        checks). After this, the app role is subject to the policies and must set
-        the tenant per transaction via
+        checks). After this, the app must connect as a **non-superuser role
+        without BYPASSRLS** (superusers and BYPASSRLS roles are never constrained
+        by RLS) and set the tenant per transaction via
         ``SELECT set_config('bass.tenant_id', <tenant>, true)``. Provided as the
         production migration; not enabled by default so the reference store's
         behavior stays identical to SQLite."""

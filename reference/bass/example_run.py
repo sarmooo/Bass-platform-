@@ -50,8 +50,8 @@ def build_workflow() -> Workflow:
             "amount": lambda ctx: ctx["extract"]["amount"],
         }, next=None),
     }
-    return Workflow(name="invoice-triage", steps=steps, start="extract",
-                    budget_usd=0.50, max_steps=25)
+    return Workflow(id="wf_invoice_triage", name="invoice-triage", steps=steps,
+                    start="extract", budget_usd=0.50, max_steps=25)
 
 
 def demo_approver(run: Run, step, tool_name, args) -> bool:
