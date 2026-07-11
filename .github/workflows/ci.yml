@@ -21,7 +21,7 @@ jobs:
       run:
         working-directory: reference
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -77,7 +77,7 @@ jobs:
       BASS_TEST_DB_URL: postgresql://bass:bass@localhost:5432/bass
       BASS_TEST_REDIS_URL: redis://localhost:6379/0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -97,7 +97,7 @@ jobs:
     env:
       BASS_TEST_TEMPORAL: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -121,7 +121,7 @@ jobs:
       # Image name (Docker path components can't end with '-', unlike the repo name).
       IMAGE: ghcr.io/sarmooo/bass
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v3    # arm64 emulation for the multi-arch publish
       - uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
