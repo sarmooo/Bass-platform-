@@ -237,7 +237,10 @@ def build_default_app():
     if not secret:
         raise BassError("BASS_JWT_SECRET must be set to run the API")
     store = open_store(os.environ.get("BASS_DB_PATH", "bass.db"))
+    # Operators tune the per-tenant request rate via env (requests per 60s window).
+    limit = int(os.environ.get("BASS_RATE_LIMIT_PER_MIN", "1000"))
     service = ApiService(store, build_agents(), default_registry(),
-                         PolicyEngine(default_policies()), jwt_secret=secret)
+                         PolicyEngine(default_policies()), jwt_secret=secret,
+                         rate_limiter=InMemoryRateLimiter(limit=limit))
     service.register_workflow(build_workflow())
     return create_app(service)

@@ -131,7 +131,8 @@ jobs:
           tags: ${{ env.IMAGE }}:ci
       - name: Boot the container
         run: |
-          docker run -d --name bass -e BASS_JWT_SECRET=ci-secret -p 8000:8000 "${IMAGE}:ci"
+          docker run -d --name bass -e BASS_JWT_SECRET=ci-secret \
+            -e BASS_RATE_LIMIT_PER_MIN=1000000 -p 8000:8000 "${IMAGE}:ci"
           ok=""
           for _ in $(seq 1 25); do
             if curl -sf http://localhost:8000/healthz | grep -q ok; then ok=1; break; fi

@@ -29,6 +29,7 @@ dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "mypy>=1.10"]
 [project.scripts]
 bass-example = "bass.example_run:main"
 bass-example-live = "bass.example_run_live:main"
+bass-migrate = "bass.migrate:main"
 
 [tool.setuptools.packages.find]
 include = ["bass*"]
