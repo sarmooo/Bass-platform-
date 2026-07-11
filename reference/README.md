@@ -142,6 +142,22 @@ runs with p95/error-rate gates — then publish to GHCR with an **SBOM + SLSA
 provenance** attestation and a **cosign keyless signature**, verified in-workflow).
 Dependabot keeps pip and Actions dependencies current.
 
+## Deploy it
+
+Deployment artifacts live in [`../deploy`](../deploy) and are validated in CI
+(`helm lint`/`template`/kubeconform + `docker compose config`):
+
+- **docker-compose** — Postgres + Redis + the API on one host, schema migrations
+  applied first: `docker compose -f deploy/docker-compose.yml up --build`.
+- **Helm chart** (`deploy/helm/bass`) — a non-root Deployment, Service, optional
+  Ingress + HPA, and a **pre-upgrade migration Job**.
+- **Schema migrations** (`bass.migrate` / `bass-migrate`) — versioned,
+  transactional, idempotent; baseline schema + row-level security, tracked in
+  `schema_migrations`. Tested in `tests/test_migrate.py`.
+
+The [operations runbook](../docs/10-operations.md) covers deploy, migrate, roll
+back, scale, incident response, and backup/restore.
+
 ## What still requires real infrastructure
 
 This is a faithful single-process implementation of the control loop. A full

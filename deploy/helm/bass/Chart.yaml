@@ -1,0 +1,15 @@
+apiVersion: v2
+name: bass
+description: Bass — durable AI automation platform API (durable workflow engine, fail-closed policy, multi-tenant)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/sarmooo/Bass-platform-
+sources:
+  - https://github.com/sarmooo/Bass-platform-
+maintainers:
+  - name: Bass
+keywords:
+  - automation
+  - workflow
+  - agents

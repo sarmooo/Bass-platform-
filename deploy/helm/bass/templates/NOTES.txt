@@ -1,0 +1,17 @@
+Bass API {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}".
+
+1. Schema migrations ran as a pre-upgrade hook Job ({{ include "bass.fullname" . }}-migrate).
+
+2. Reach the API:
+{{- if .Values.ingress.enabled }}
+   https://{{ (first .Values.ingress.hosts).host }}/
+{{- else }}
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "bass.fullname" . }} 8000:{{ .Values.service.port }}
+   open http://localhost:8000/            # operator console
+{{- end }}
+
+3. Health: GET /healthz (liveness), GET /readyz (datastore reachable).
+
+Config comes from the Secret "{{ include "bass.secretName" . }}" (jwtSecret, databaseUrl)
+and values (rateLimitPerMin={{ .Values.config.rateLimitPerMin }}). In production,
+manage the Secret externally and set secret.existingSecret.
