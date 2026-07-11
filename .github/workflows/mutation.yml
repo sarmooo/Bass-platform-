@@ -1,0 +1,41 @@
+name: Mutation testing
+
+# Advisory mutation testing over the core pure modules — measures whether the
+# test suite actually kills injected faults (surviving mutants = weak assertions).
+# Kept off the push critical path (it's slow) and non-blocking: run on demand or
+# weekly, review survivors, tighten tests.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 3"      # weekly, Wednesdays 05:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  mutmut:
+    name: mutmut (core modules, advisory)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" "mutmut<3"
+      - name: Run mutation testing (advisory)
+        continue-on-error: true
+        run: |
+          mutmut run \
+            --paths-to-mutate "bass/policy.py,bass/budgets.py,bass/redaction.py,bass/schedule.py,bass/ratelimit.py" \
+            --runner "python -m pytest -x -q tests/test_bass.py tests/test_properties.py tests/test_schedule.py" \
+            || true
+      - name: Report survivors
+        if: always()
+        run: mutmut results || true
