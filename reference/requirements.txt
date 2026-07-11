@@ -1,0 +1,9 @@
+# The reference scaffold intentionally uses only the Python standard library so it
+# runs anywhere with no install step. A real deployment would add, e.g.:
+#
+#   anthropic         # the model provider SDK
+#   fastapi uvicorn   # the API gateway
+#   sqlalchemy psycopg # Postgres state store
+#   pydantic          # schema validation
+#   temporalio        # durable workflow execution
+#   opentelemetry-sdk # tracing
