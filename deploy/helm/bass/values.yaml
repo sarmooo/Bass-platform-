@@ -1,0 +1,93 @@
+# Default values for the Bass API chart.
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/sarmooo/bass
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+# The API reads its config from env. The database URL and JWT secret come from a
+# Secret; either let the chart create one from `secret.*` below, or point
+# `existingSecret` at a Secret you manage (recommended in production).
+config:
+  logJson: true
+  rateLimitPerMin: 1000
+
+secret:
+  create: true
+  existingSecret: ""          # if set, the chart uses this Secret instead of creating one
+  # Used only when create=true. In production prefer an externally-managed Secret
+  # or a secrets operator (External Secrets, Vault) rather than values.yaml.
+  jwtSecret: ""               # REQUIRED when create=true
+  databaseUrl: ""             # postgresql://user:pass@host:5432/bass
+
+# Run schema migrations as a pre-install/pre-upgrade Helm hook Job.
+migrations:
+  enabled: true
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: bass.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

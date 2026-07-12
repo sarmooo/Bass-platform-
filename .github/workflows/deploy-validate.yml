@@ -1,0 +1,81 @@
+name: Deploy manifests
+
+# Validates the deployment artifacts (Helm chart + docker-compose) on every
+# change to them. This does not deploy — it proves the manifests render and are
+# schema-valid, so a real `helm upgrade` / `docker compose up` won't fail on
+# malformed YAML.
+
+on:
+  push:
+    paths:
+      - "deploy/**"
+      - ".github/workflows/deploy-validate.yml"
+  pull_request:
+    paths:
+      - "deploy/**"
+      - ".github/workflows/deploy-validate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  helm:
+    name: Helm lint, template & schema-validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+      - name: Lint the chart
+        run: helm lint deploy/helm/bass --set secret.jwtSecret=ci-test
+      - name: Render templates (default values)
+        run: |
+          helm template bass deploy/helm/bass \
+            --set secret.jwtSecret=ci-test \
+            --set secret.databaseUrl=postgresql://u:p@postgres:5432/bass \
+            > /tmp/rendered-default.yaml
+          test -s /tmp/rendered-default.yaml
+      - name: Render templates (ingress + autoscaling on)
+        run: |
+          helm template bass deploy/helm/bass \
+            --set secret.jwtSecret=ci-test \
+            --set ingress.enabled=true \
+            --set autoscaling.enabled=true \
+            > /tmp/rendered-full.yaml
+          grep -q "HorizontalPodAutoscaler" /tmp/rendered-full.yaml
+          grep -q "kind: Ingress" /tmp/rendered-full.yaml
+      - name: Fail-fast when the JWT secret is missing
+        run: |
+          if helm template bass deploy/helm/bass > /dev/null 2>&1; then
+            echo "expected templating to fail without secret.jwtSecret"; exit 1
+          fi
+          echo "correctly refused to render without a JWT secret"
+      - name: Schema-validate rendered manifests (kubeconform)
+        run: |
+          curl -sSLf https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+          kubeconform -strict -summary -ignore-missing-schemas /tmp/rendered-default.yaml
+          kubeconform -strict -summary -ignore-missing-schemas /tmp/rendered-full.yaml
+
+  helm-unittest:
+    name: Helm chart unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4     # latest (Helm 4) — matches the current
+                                      # helm-unittest plugin's platformHooks schema
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
+      - name: Run chart unit tests
+        run: helm unittest deploy/helm/bass
+
+  compose:
+    name: Validate docker-compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose config (parse + interpolate)
+        env:
+          BASS_JWT_SECRET: ci-test
+        run: docker compose -f deploy/docker-compose.yml config > /dev/null

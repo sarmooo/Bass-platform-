@@ -1,0 +1,6 @@
+# Dependencies are declared in pyproject.toml. The core package and its test
+# suite need only the Python standard library.
+#
+#   pip install -e .            # core (stdlib only)
+#   pip install -e ".[live]"    # + anthropic, for the real Claude provider
+#   pip install -e ".[dev]"     # + pytest, ruff, mypy (used in CI)

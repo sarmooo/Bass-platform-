@@ -1,0 +1,200 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Least privilege by default; the publish job widens its own scope.
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Lint, types & unit tests (SQLite)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: reference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,api,otel]"
+      - name: Lint (ruff)
+        if: matrix.python-version == '3.11'
+        run: ruff check bass tests
+      - name: Type check (mypy)
+        if: matrix.python-version == '3.11'
+        run: mypy bass
+      - name: Test (pytest + coverage gate)
+        run: pytest -q --cov=bass --cov-report=term-missing --cov-fail-under=80
+      - name: Dependency audit (advisory)
+        if: matrix.python-version == '3.11'
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit
+
+  integration-postgres:
+    name: Integration tests (real PostgreSQL)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bass
+          POSTGRES_PASSWORD: bass
+          POSTGRES_DB: bass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bass"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      BASS_TEST_DB_URL: postgresql://bass:bass@localhost:5432/bass
+      BASS_TEST_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (PostgreSQL driver + API + Redis)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,postgres,api,redis]"
+      - name: Test (pytest, PostgreSQL store + Redis rate limiter)
+        run: pytest -q
+
+  temporal:
+    name: Temporal durable execution
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reference
+    env:
+      BASS_TEST_TEMPORAL: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (Temporal)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,temporal]"
+      - name: Test (a Bass run driven by a Temporal workflow)
+        run: pytest -q tests/test_temporal.py
+
+  docker:
+    name: Build, smoke-test, load-test, sign & publish image
+    runs-on: ubuntu-latest
+    needs: [unit]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write          # OIDC for cosign keyless signing
+      attestations: write
+    env:
+      # Image name (Docker path components can't end with '-', unlike the repo name).
+      IMAGE: ghcr.io/sarmooo/bass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3    # arm64 emulation for the multi-arch publish
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build image (local, for smoke + load test)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGE }}:ci
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin
+          trivy --version
+      - name: Scan image for fixable CRITICAL vulnerabilities (gating)
+        run: |
+          trivy image --scanners vuln --ignore-unfixed --severity CRITICAL \
+            --exit-code 1 --format table "${IMAGE}:ci"
+      - name: Full vulnerability report (HIGH+CRITICAL, advisory)
+        if: always()
+        run: |
+          trivy image --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 0 --format table "${IMAGE}:ci" || true
+      - name: Boot the container
+        run: |
+          docker run -d --name bass -e BASS_JWT_SECRET=ci-secret \
+            -e BASS_RATE_LIMIT_PER_MIN=1000000 -p 8000:8000 "${IMAGE}:ci"
+          ok=""
+          for _ in $(seq 1 25); do
+            if curl -sf http://localhost:8000/healthz | grep -q ok; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs bass || true
+          test -n "$ok"
+      - name: Load smoke test (k6, 10 VUs × 15s, p95 + error-rate gate)
+        working-directory: reference
+        run: |
+          docker run --rm --network host \
+            -e BASE_URL=http://localhost:8000 -e JWT_SECRET=ci-secret \
+            -v "$PWD/loadtest:/scripts" grafana/k6:latest run /scripts/smoke.js
+      - name: Tear down the container
+        if: always()
+        run: docker rm -f bass || true
+      - name: Publish, attest (SBOM + provenance) & sign
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v6
+        id: push
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64    # multi-arch manifest
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          sbom: true                 # attach an SPDX SBOM attestation
+          provenance: mode=max       # attach SLSA build provenance
+      - name: Install cosign
+        if: github.event_name == 'push'
+        uses: sigstore/cosign-installer@v3
+      - name: Sign the image (keyless / OIDC) and verify
+        if: github.event_name == 'push'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-identity-regexp "https://github.com/${GITHUB_REPOSITORY}/.*" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            > /dev/null
+          echo "Signed and verified ${IMAGE}@${DIGEST}"

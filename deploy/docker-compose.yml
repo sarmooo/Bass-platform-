@@ -1,0 +1,72 @@
+# Local production-shaped stack: PostgreSQL + Redis + the Bass API, with schema
+# migrations applied on startup. Brings up the same topology a real deployment
+# uses, on one machine.
+#
+#   export BASS_JWT_SECRET=$(openssl rand -hex 32)
+#   docker compose -f deploy/docker-compose.yml up --build
+#
+# The API comes up on http://localhost:8000 (operator console at /).
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: bass
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bass}
+      POSTGRES_DB: bass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bass"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: apply schema migrations (baseline + RLS) before the API starts.
+  migrate:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["bass-migrate"]
+    environment:
+      BASS_DB_URL: postgresql://bass:${POSTGRES_PASSWORD:-bass}@postgres:5432/bass
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      BASS_JWT_SECRET: ${BASS_JWT_SECRET:?set BASS_JWT_SECRET}
+      BASS_DB_URL: postgresql://bass:${POSTGRES_PASSWORD:-bass}@postgres:5432/bass
+      BASS_RATE_LIMIT_PER_MIN: ${BASS_RATE_LIMIT_PER_MIN:-1000}
+      BASS_LOG_JSON: "1"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  pgdata:

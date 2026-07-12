@@ -1,0 +1,29 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+categories:
+  - title: "Features"
+    labels: ["feature", "enhancement"]
+  - title: "Fixes"
+    labels: ["fix", "bug"]
+  - title: "Security & supply chain"
+    labels: ["security"]
+  - title: "Maintenance"
+    labels: ["chore", "ci", "docs", "deps"]
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
+version-resolver:
+  major:
+    labels: ["major"]
+  minor:
+    labels: ["minor", "feature", "enhancement"]
+  patch:
+    labels: ["patch", "fix", "bug"]
+  default: patch
+template: |
+  ## Changes
+
+  $CHANGES
+
+  ## Container image
+
+  `ghcr.io/sarmooo/bass:v$RESOLVED_VERSION` — signed with cosign, with an SBOM +
+  SLSA provenance attestation.

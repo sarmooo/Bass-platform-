@@ -1,0 +1,40 @@
+name: OpenSSF Scorecard
+
+# Supply-chain posture check (branch protection, pinned actions, token perms,
+# signed releases, …). Advisory: results are uploaded as a build artifact rather
+# than to code scanning, so it never blocks CI and needs no GHAS setup. Review
+# the artifact and raise the score over time.
+
+on:
+  push:
+    branches: ["main", "claude/ai-automation-system-design-sya5ug"]
+  schedule:
+    - cron: "0 6 * * 1"      # weekly, Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    name: Analyze supply-chain posture
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2.4.0
+        continue-on-error: true     # advisory — a low score must not red the pipeline
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: false
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecard-results
+          path: scorecard.sarif
+          if-no-files-found: warn

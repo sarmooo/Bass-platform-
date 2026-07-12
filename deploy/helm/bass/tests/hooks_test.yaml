@@ -1,0 +1,33 @@
+suite: migration hooks and secret
+tests:
+  - it: makes the migration Job a pre-install/pre-upgrade hook
+    template: templates/migrate-job.yaml
+    set:
+      secret.jwtSecret: x
+    asserts:
+      - isKind:
+          of: Job
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: pre-install,pre-upgrade
+  - it: makes the ServiceAccount a hook so the migration Job can run under it
+    template: templates/serviceaccount.yaml
+    set:
+      secret.jwtSecret: x
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: pre-install,pre-upgrade
+  - it: makes the Secret a hook created before the migration Job
+    template: templates/secret.yaml
+    set:
+      secret.jwtSecret: x
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook-weight"]
+          value: "-10"
+  - it: refuses to render the Secret without a jwt secret
+    template: templates/secret.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "secret.jwtSecret is required when secret.create=true (or set secret.existingSecret)"

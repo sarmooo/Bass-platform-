@@ -1,0 +1,143 @@
+name: End-to-end
+
+# Exercises the deployment artifacts for real (beyond the lint/template checks in
+# deploy-validate): brings the docker-compose stack up and fires a Postgres-backed
+# run, and deploys the Helm chart to an ephemeral kind cluster (migration hook +
+# readiness + upgrade/rollback drill).
+
+on:
+  push:
+    paths:
+      - "deploy/**"
+      - "reference/**"
+      - "Dockerfile"
+      - ".github/workflows/e2e.yml"
+  pull_request:
+    paths:
+      - "deploy/**"
+      - "reference/**"
+      - "Dockerfile"
+      - ".github/workflows/e2e.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    name: docker-compose stack (Postgres-backed run)
+    runs-on: ubuntu-latest
+    env:
+      BASS_JWT_SECRET: e2e-secret
+      COMPOSE: docker compose -f deploy/docker-compose.yml
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bring up the stack (Postgres + Redis + API, migrations first)
+        run: $COMPOSE up -d --build
+      - name: Wait for readiness (store reachable)
+        run: |
+          ok=""
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:8000/readyz | grep -q ready; then ok=1; break; fi
+            sleep 2
+          done
+          $COMPOSE ps
+          $COMPOSE logs --tail=60
+          test -n "$ok"
+      - name: Fire a run end-to-end and assert it succeeded
+        run: |
+          # Mint a token using the real auth code inside the running container.
+          TOKEN=$($COMPOSE exec -T api python -c \
+            "from bass.auth import mint_token; print(mint_token('e2e-secret','acme','u1',['builder']))" \
+            | tr -d '\r')
+          code=$(curl -s -o /tmp/resp.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"trigger":{"vendor":"Globex Corp","invoice_number":"E2E-1","amount":100}}' \
+            http://localhost:8000/v1/workflows/invoice-triage/runs)
+          echo "HTTP $code"; cat /tmp/resp.json; echo
+          test "$code" = "200"
+          python3 -c "import json,sys; d=json.load(open('/tmp/resp.json')); \
+            print('status', d['status']); sys.exit(0 if d['status']=='succeeded' else 1)"
+      - name: Confirm the run persisted in PostgreSQL (not SQLite)
+        run: |
+          $COMPOSE exec -T postgres psql -U bass -d bass -tAc \
+            "SELECT count(*) FROM runs WHERE status='succeeded'" | grep -qE '^[1-9]'
+          $COMPOSE exec -T postgres psql -U bass -d bass -tAc \
+            "SELECT count(*) FROM schema_migrations" | grep -qE '^[1-9]'
+      - name: Tear down
+        if: always()
+        run: $COMPOSE down -v
+
+  kind:
+    name: Helm deploy to kind (migrate hook + rollback drill)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # "" uses kind-action's default (known-good) image; the pinned entries
+        # prove the chart deploys across supported Kubernetes minor versions.
+        node_image: ["", "kindest/node:v1.31.0", "kindest/node:v1.29.0"]
+    env:
+      IMAGE: ghcr.io/sarmooo/bass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image locally
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGE }}:e2e
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: bass
+          node_image: ${{ matrix.node_image }}
+      - name: Load the image into kind
+        run: kind load docker-image ${IMAGE}:e2e --name bass
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+      - name: Deploy an ephemeral PostgreSQL
+        run: |
+          kubectl apply -f deploy/ci/postgres.yaml
+          kubectl rollout status deploy/postgres --timeout=120s
+      - name: helm install (runs the pre-install migration hook)
+        run: |
+          helm install bass deploy/helm/bass \
+            --set image.repository=${IMAGE} \
+            --set image.tag=e2e \
+            --set image.pullPolicy=Never \
+            --set secret.jwtSecret=kind-secret \
+            --set secret.databaseUrl=postgresql://bass:bass@postgres:5432/bass \
+            --wait --timeout 180s
+      - name: Verify migrations applied and pods are ready
+        run: |
+          # `helm install --wait` already fails if the pre-install migration hook
+          # fails, and Helm deletes the hook Job on success — so prove migrations
+          # ran by inspecting Postgres directly, and confirm the rollout is ready.
+          kubectl rollout status deploy/bass --timeout=120s
+          PG=$(kubectl get pod -l app=postgres -o jsonpath='{.items[0].metadata.name}')
+          kubectl exec "$PG" -- psql -U bass -d bass -tAc \
+            "SELECT count(*) FROM schema_migrations" | grep -qE '^[1-9]'
+      - name: Smoke the service through the Service
+        run: |
+          kubectl port-forward svc/bass 8080:80 >/tmp/pf.log 2>&1 &
+          sleep 6
+          curl -sf http://localhost:8080/readyz | grep ready
+          curl -sf http://localhost:8080/healthz | grep ok
+      - name: Upgrade + rollback drill
+        run: |
+          helm upgrade bass deploy/helm/bass --reuse-values --set replicaCount=1 \
+            --wait --timeout 150s
+          helm rollback bass 1 --wait --timeout 150s
+          helm status bass
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods,jobs,svc -o wide || true
+          kubectl describe job bass-migrate || true
+          kubectl logs job/bass-migrate --all-containers=true --tail=200 || true
+          kubectl describe pods -l app.kubernetes.io/name=bass || true
+          kubectl logs -l app.kubernetes.io/name=bass --tail=200 --all-containers=true || true
+          echo "=== recent events ==="
+          kubectl get events --sort-by=.lastTimestamp | tail -50 || true

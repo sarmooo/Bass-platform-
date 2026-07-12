@@ -1,0 +1,37 @@
+suite: deployment
+templates:
+  - templates/deployment.yaml
+tests:
+  - it: renders the configured image
+    set:
+      image.repository: example/bass
+      image.tag: "9.9.9"
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: example/bass:9.9.9
+  - it: defaults to two replicas when autoscaling is off
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2
+  - it: drops replicas from the spec when autoscaling is on
+    set:
+      autoscaling.enabled: true
+    asserts:
+      - notExists:
+          path: spec.replicas
+  - it: mounts a writable /tmp for the read-only root filesystem
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: tmp
+            emptyDir: {}
+  - it: runs as non-root
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true

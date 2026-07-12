@@ -1,0 +1,6 @@
+.coverage
+dist/
+build/
+*.egg-info/
+.benchmarks/
+.mutmut-cache
