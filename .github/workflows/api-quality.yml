@@ -47,7 +47,7 @@ jobs:
       - run: pip install -e ".[dev,api]"
       - name: Run benchmarks and record timings
         run: pytest tests/test_benchmarks.py --benchmark-only --benchmark-json=benchmark.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: benchmarks
           path: reference/benchmark.json
